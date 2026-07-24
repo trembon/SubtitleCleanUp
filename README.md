@@ -58,6 +58,47 @@ The first published package may be private depending on the GitHub account's
 package settings. Change the package visibility to public in GitHub if anonymous
 Docker pulls should be allowed.
 
+### Docker Compose example using the prebuilt image
+
+Save the following as `compose.yaml`:
+
+```yaml
+services:
+  subtitlecleanup:
+    image: ghcr.io/trembon/subtitlecleanup:latest
+    container_name: subtitlecleanup
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      ConnectionStrings__SubtitleCleanup: "Data Source=/data/subtitlecleanup.db"
+      SubtitleCleanup__Roots__0__Name: "media"
+      SubtitleCleanup__Roots__0__Path: "/media"
+      SubtitleCleanup__ScanCron: "0 3 * * *"
+      SubtitleCleanup__TimeZone: "Europe/Stockholm"
+      SubtitleCleanup__ScanOnStartup: "true"
+      SubtitleCleanup__QuarantineRoot: "/data/quarantine"
+      SubtitleCleanup__PreviewMaxBytes: "2097152"
+    volumes:
+      - "/path/to/your/media:/media:rw"
+      - "subtitlecleanup-data:/data"
+
+volumes:
+  subtitlecleanup-data:
+```
+
+Replace `/path/to/your/media` with the host folder containing your media, then run:
+
+```sh
+docker compose up -d
+```
+
+Open <http://127.0.0.1:8080>. The media folder must be readable and writable by
+the container's non-root user before approved changes can be applied. Add more
+roots with `SubtitleCleanup__Roots__1__Name` and
+`SubtitleCleanup__Roots__1__Path`, together with matching volume mounts. To pin a
+specific build, replace `latest` with its `sha-<commit>` image tag.
+
 ## Configuration
 
 ASP.NET Core's environment-variable format is used:
