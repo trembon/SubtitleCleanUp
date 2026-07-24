@@ -17,6 +17,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
+LABEL org.opencontainers.image.source="https://github.com/trembon/SubtitleCleanUp"
+LABEL org.opencontainers.image.description="Review and normalize SRT subtitle names and duplicates."
 
 RUN mkdir -p /data && chown app:app /data
 COPY --from=build --chown=app:app /app/publish .

@@ -41,6 +41,23 @@ reverse proxy.
 SQLite state and quarantined files are stored in the `subtitlecleanup-data` volume.
 Removing and recreating the application container does not remove that volume.
 
+## Prebuilt container
+
+After the test suite passes on `main`, GitHub Actions publishes the same Dockerfile
+to GitHub Container Registry:
+
+```sh
+docker pull ghcr.io/trembon/subtitlecleanup:latest
+```
+
+Every main-branch build receives both `latest` and `sha-<commit>` tags. Git tags
+such as `v1.0.0` are also published with their matching image tag. Pull requests
+build the image for validation but never publish it.
+
+The first published package may be private depending on the GitHub account's
+package settings. Change the package visibility to public in GitHub if anonymous
+Docker pulls should be allowed.
+
 ## Configuration
 
 ASP.NET Core's environment-variable format is used:
