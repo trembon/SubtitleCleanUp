@@ -1,0 +1,24 @@
+services:
+  subtitlecleanup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: subtitlecleanup:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      ConnectionStrings__SubtitleCleanup: "Data Source=/data/subtitlecleanup.db"
+      SubtitleCleanup__Roots__0__Name: "media"
+      SubtitleCleanup__Roots__0__Path: "/media"
+      SubtitleCleanup__ScanCron: "${SUBTITLE_SCAN_CRON:-0 3 * * *}"
+      SubtitleCleanup__TimeZone: "${SUBTITLE_TIME_ZONE:-Europe/Stockholm}"
+      SubtitleCleanup__ScanOnStartup: "${SUBTITLE_SCAN_ON_STARTUP:-true}"
+      SubtitleCleanup__QuarantineRoot: "/data/quarantine"
+      SubtitleCleanup__PreviewMaxBytes: "${SUBTITLE_PREVIEW_MAX_BYTES:-2097152}"
+    volumes:
+      - "${MEDIA_PATH:-./media}:/media:rw"
+      - "subtitlecleanup-data:/data"
+
+volumes:
+  subtitlecleanup-data:

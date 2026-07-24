@@ -1,0 +1,14 @@
+.vs/
+.vscode/
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+*.suo
+*.db
+*.db-shm
+*.db-wal
+/data/
+/media/
+coverage/
+/src/SubtitleCleanUp.Web/Data/keys/

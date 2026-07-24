@@ -1,0 +1,34 @@
+name: build-and-test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore SubtitleCleanUp.slnx
+      - run: dotnet build SubtitleCleanUp.slnx --configuration Release --no-restore
+      - name: Core line coverage
+        run: >
+          dotnet test tests/SubtitleCleanUp.Core.Tests/SubtitleCleanUp.Core.Tests.csproj
+          --configuration Release --no-build
+          /p:CollectCoverage=true
+          /p:Threshold=80
+          /p:ThresholdType=line
+      - name: Core branch coverage
+        run: >
+          dotnet test tests/SubtitleCleanUp.Core.Tests/SubtitleCleanUp.Core.Tests.csproj
+          --configuration Release --no-build
+          /p:CollectCoverage=true
+          /p:Threshold=70
+          /p:ThresholdType=branch
+      - name: Application tests
+        run: dotnet test tests/SubtitleCleanUp.Web.Tests/SubtitleCleanUp.Web.Tests.csproj --configuration Release --no-build
+      - name: Build container
+        run: docker build --tag subtitlecleanup:test .

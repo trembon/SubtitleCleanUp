@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SubtitleCleanUp.Core/SubtitleCleanUp.Core.csproj" />
+    <Project Path="src/SubtitleCleanUp.Web/SubtitleCleanUp.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SubtitleCleanUp.Core.Tests/SubtitleCleanUp.Core.Tests.csproj" />
+    <Project Path="tests/SubtitleCleanUp.Web.Tests/SubtitleCleanUp.Web.Tests.csproj" />
+  </Folder>
+</Solution>

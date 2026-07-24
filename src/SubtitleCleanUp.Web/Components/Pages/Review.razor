@@ -1,0 +1,200 @@
+@page "/review"
+@rendermode InteractiveServer
+@inject IDbContextFactory<SubtitleCleanupDbContext> DbFactory
+@inject ChangeExecutionService Executor
+@inject SubtitlePreviewService PreviewService
+
+<PageTitle>Review queue · SubtitleCleanUp</PageTitle>
+
+<header class="page-header review-header">
+    <div>
+        <p class="eyebrow">Approval center</p>
+        <h1>Review queue</h1>
+        <p class="lede">Choose the best subtitle in each group, inspect its contents, then approve only the changes you want.</p>
+    </div>
+    <div class="header-actions">
+        <span class="selection-count">@_selected.Count selected</span>
+        <button class="button primary" disabled="@(_selected.Count == 0)" @onclick="BeginApply">Apply selected</button>
+    </div>
+</header>
+
+@if (_notice is not null)
+{
+    <div class="notice @(_noticeIsError ? "error" : "success")" role="status">@_notice</div>
+}
+
+<div class="filter-bar">
+    <label class="search-box"><span>⌕</span><input placeholder="Filter by title, language, or path…" @bind="_search" @bind:event="oninput" /></label>
+    <select aria-label="Filter by proposal type" @bind="_kindFilter">
+        <option value="">All changes</option>
+        <option value="@ProposalKind.Duplicate">Duplicates</option>
+        <option value="@ProposalKind.Rename">Renames</option>
+        <option value="@ProposalKind.ManualReview">Manual review</option>
+    </select>
+    <span class="result-count">@Filtered.Count() proposals</span>
+</div>
+
+@if (_loading)
+{
+    <div class="loading-state">Loading review queue…</div>
+}
+else if (!Filtered.Any())
+{
+    <div class="panel empty-state large"><span>✓</span><h2>Nothing matches this view</h2><p>Try another filter or run a new scan.</p></div>
+}
+else
+{
+    <div class="review-list">
+        @foreach (var proposal in Filtered)
+        {
+            <article class="review-card">
+                <div class="review-card-header">
+                    <label class="select-proposal" title="Select proposal">
+                        <input type="checkbox" disabled="@(proposal.Kind == ProposalKind.ManualReview)"
+                               checked="@_selected.Contains(proposal.Id)" @onchange="e => ToggleSelected(proposal.Id, e)" />
+                    </label>
+                    <div class="proposal-title">
+                        <span class="file-kind @(proposal.Kind == ProposalKind.Duplicate ? "warning" : proposal.Kind == ProposalKind.ManualReview ? "manual" : "")">
+                            @(proposal.Kind == ProposalKind.Duplicate ? "DUP" : proposal.Kind == ProposalKind.Rename ? "REN" : "CHK")
+                        </span>
+                        <div><h2>@proposal.MediaStem</h2><p>@proposal.RootName · @proposal.Language@Variant(proposal.Variant)</p></div>
+                    </div>
+                    <div class="canonical-target"><span>Canonical target</span><code>@(proposal.CanonicalPath is null ? "Manual inspection" : Path.GetFileName(proposal.CanonicalPath))</code></div>
+                </div>
+                <p class="reason">@proposal.Reason</p>
+                <div class="file-options">
+                    @foreach (var file in proposal.Files.OrderByDescending(x => x.IsRecommended))
+                    {
+                        <div class="file-option @(proposal.SelectedKeeperId == file.Id ? "selected" : "")">
+                            @if (proposal.Kind != ProposalKind.ManualReview)
+                            {
+                                <input type="radio" aria-label="Keep @file.FileName" name="keeper-@proposal.Id"
+                                       checked="@(proposal.SelectedKeeperId == file.Id)" @onchange="() => SelectKeeperAsync(proposal.Id, file.Id)" />
+                            }
+                            else
+                            {
+                                <span class="manual-dot"></span>
+                            }
+                            <div class="file-details">
+                                <div>
+                                    <strong>@file.FileName</strong>
+                                    @if (file.IsRecommended) { <span class="badge">Recommended</span> }
+                                    @if (file.IsCanonical) { <span class="badge neutral">Canonical</span> }
+                                </div>
+                                <small>@FormatSize(file.Size) · @file.LastWriteUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · <span title="@file.FullPath">@file.RelativePath</span></small>
+                            </div>
+                            <button class="button ghost small" @onclick="() => ShowPreviewAsync(file.Id, file.FileName)">Preview</button>
+                        </div>
+                    }
+                </div>
+                <div class="review-card-footer">
+                    <button class="button ghost small" @onclick="() => DismissAsync(proposal.Id)">Dismiss</button>
+                    @if (proposal.Kind != ProposalKind.ManualReview)
+                    {
+                        <button class="button secondary small" @onclick="() => ApplyOne(proposal.Id)">Apply this change</button>
+                    }
+                </div>
+            </article>
+        }
+    </div>
+}
+
+@if (_confirming)
+{
+    <div class="modal-backdrop" role="presentation">
+        <section class="modal confirmation" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <p class="eyebrow">Final confirmation</p>
+            <h2 id="confirm-title">Apply @_selected.Count selected changes?</h2>
+            <p>Duplicates will move to quarantine and remain recoverable. Keepers will receive their canonical names.</p>
+            <div class="confirmation-summary"><strong>@SelectedFileCount files reviewed</strong><span>No unselected proposal will be changed.</span></div>
+            <div class="modal-actions">
+                <button class="button ghost" @onclick="() => _confirming = false">Cancel</button>
+                <button class="button danger" disabled="@_applying" @onclick="ApplySelectedAsync">@(_applying ? "Applying…" : "Apply approved changes")</button>
+            </div>
+        </section>
+    </div>
+}
+
+@if (_preview is not null || _previewError is not null)
+{
+    <div class="modal-backdrop" role="presentation" @onclick="ClosePreview">
+        <section class="modal preview-modal" role="dialog" aria-modal="true" aria-labelledby="preview-title" @onclick:stopPropagation>
+            <div class="modal-heading">
+                <div><p class="eyebrow">Plain-text preview</p><h2 id="preview-title">@_previewName</h2></div>
+                <button class="close-button" aria-label="Close preview" @onclick="ClosePreview">×</button>
+            </div>
+            @if (_previewError is not null)
+            {
+                <div class="notice error">@_previewError</div>
+            }
+            else
+            {
+                <div class="preview-meta"><span>@_preview!.EncodingName</span>@if (_preview.IsTruncated) { <span class="badge warning">Preview truncated</span> }</div>
+                <pre class="subtitle-preview">@_preview.Text</pre>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private List<ChangeProposal> _proposals = [];
+    private readonly HashSet<int> _selected = [];
+    private string _search = string.Empty, _kindFilter = string.Empty, _previewName = string.Empty;
+    private bool _loading = true, _confirming, _applying, _noticeIsError;
+    private string? _notice, _previewError;
+    private PreviewContent? _preview;
+
+    private IEnumerable<ChangeProposal> Filtered => _proposals.Where(x =>
+        (string.IsNullOrWhiteSpace(_kindFilter) || x.Kind.ToString() == _kindFilter) &&
+        (string.IsNullOrWhiteSpace(_search) || x.MediaStem.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+         (x.Language?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+         x.Files.Any(f => f.RelativePath.Contains(_search, StringComparison.OrdinalIgnoreCase))));
+    private int SelectedFileCount => _proposals.Where(x => _selected.Contains(x.Id)).Sum(x => x.Files.Count);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _proposals = await db.ChangeProposals.AsNoTracking().Include(x => x.Files)
+            .Where(x => x.Status == ProposalStatus.Pending)
+            .OrderByDescending(x => x.Kind == ProposalKind.Duplicate).ThenBy(x => x.MediaStem).ToListAsync();
+        _selected.RemoveWhere(id => _proposals.All(x => x.Id != id));
+        _loading = false;
+    }
+
+    private void ToggleSelected(int id, ChangeEventArgs args) { if (args.Value is true) _selected.Add(id); else _selected.Remove(id); }
+    private async Task SelectKeeperAsync(int proposalId, int fileId)
+    {
+        await Executor.SelectKeeperAsync(proposalId, fileId);
+        _proposals.Single(x => x.Id == proposalId).SelectedKeeperId = fileId;
+    }
+    private async Task DismissAsync(int id)
+    {
+        await Executor.DismissAsync(id);
+        _noticeIsError = false; _notice = "Proposal dismissed until its files change.";
+        await LoadAsync();
+    }
+    private void BeginApply() => _confirming = _selected.Count > 0;
+    private void ApplyOne(int id) { _selected.Clear(); _selected.Add(id); _confirming = true; }
+    private async Task ApplySelectedAsync()
+    {
+        _applying = true; _notice = null;
+        foreach (var id in _selected.ToArray())
+        {
+            try { await Executor.ApplyAsync(id); }
+            catch (Exception ex) { _noticeIsError = true; _notice = $"A change could not be applied: {ex.Message}"; break; }
+        }
+        _confirming = false; _applying = false;
+        if (_notice is null) { _noticeIsError = false; _notice = "Approved changes applied. Quarantined files remain recoverable."; }
+        _selected.Clear();
+        await LoadAsync();
+    }
+    private async Task ShowPreviewAsync(int id, string name)
+    {
+        _previewName = name; _preview = null; _previewError = null;
+        try { _preview = await PreviewService.ReadAsync(id); } catch (Exception ex) { _previewError = ex.Message; }
+    }
+    private void ClosePreview() { _preview = null; _previewError = null; }
+    private static string FormatSize(long bytes) => bytes >= 1048576 ? $"{bytes / 1048576d:F1} MB" : $"{Math.Max(1, bytes / 1024d):F1} KB";
+    private static string Variant(string? value) => value is null ? string.Empty : $" · {value}";
+}

@@ -1,0 +1,32 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" href="/">
+            <span class="brand-mark">SC</span>
+            <span>
+                <strong>SubtitleCleanUp</strong>
+                <small>Media maintenance</small>
+            </span>
+        </a>
+        <nav aria-label="Primary navigation">
+            <NavLink href="/" Match="NavLinkMatch.All"><span aria-hidden="true">⌂</span> Dashboard</NavLink>
+            <NavLink href="/review"><span aria-hidden="true">✓</span> Review queue</NavLink>
+            <NavLink href="/history"><span aria-hidden="true">↺</span> History &amp; recovery</NavLink>
+        </nav>
+        <div class="safety-note">
+            <span class="status-dot"></span>
+            <div>
+                <strong>Approval required</strong>
+                <small>Scans never modify files</small>
+            </div>
+        </div>
+    </aside>
+    <main class="content">@Body</main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Something went wrong.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
