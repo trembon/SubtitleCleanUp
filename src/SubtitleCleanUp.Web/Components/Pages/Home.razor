@@ -5,6 +5,7 @@
 @inject ScanScheduler Scheduler
 @inject OperationGate Gate
 @inject IOptions<SubtitleCleanupOptions> Options
+@implements IDisposable
 
 <PageTitle>Dashboard · SubtitleCleanUp</PageTitle>
 
@@ -99,7 +100,15 @@
     private ScanRun? _lastRun;
     private List<ChangeProposal> _recent = [];
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        Gate.StateChanged += OnGateStateChanged;
+        await LoadAsync();
+    }
+
+    private void OnGateStateChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Gate.StateChanged -= OnGateStateChanged;
 
     private async Task LoadAsync()
     {
