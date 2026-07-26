@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using SubtitleCleanUp.Core.Abstractions;
 using SubtitleCleanUp.Core.Configuration;
+using SubtitleCleanUp.Core.Models;
 using SubtitleCleanUp.Core.Services;
 using SubtitleCleanUp.Web.Components;
 using SubtitleCleanUp.Web.Data;
@@ -102,6 +103,16 @@ app.MapGet("/health/ready", async (
     return await db.Database.CanConnectAsync(cancellationToken)
         ? Results.Ok(new { status = "ready" })
         : Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+});
+app.MapGet("/api/queue", async (
+    IDbContextFactory<SubtitleCleanupDbContext> dbFactory,
+    CancellationToken cancellationToken) =>
+{
+    await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+    var count = await db.ChangeProposals.CountAsync(
+        proposal => proposal.Status == ProposalStatus.Pending,
+        cancellationToken);
+    return Results.Ok(new { count });
 });
 
 await using (var db = await app.Services

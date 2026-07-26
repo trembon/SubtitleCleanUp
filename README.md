@@ -117,6 +117,43 @@ ASP.NET Core's environment-variable format is used:
 Add additional roots with `Roots__1`, `Roots__2`, and so on, and add corresponding
 volume mounts. Scheduled scans never apply proposals.
 
+## Public API
+
+`GET /api/queue` returns the number of pending review proposals:
+
+```json
+{
+  "count": 12
+}
+```
+
+The count matches the application's **Needs review** metric. Each pending rename,
+duplicate group, or manual-review proposal counts once, regardless of how many
+subtitle files belong to it. Dismissed, stale, applying, applied, and failed
+proposals are excluded. The endpoint is read-only and does not require
+authentication.
+
+To display the count with Homepage's
+[Custom API widget](https://gethomepage.dev/widgets/services/customapi/), add a
+widget like this to `services.yaml`:
+
+```yaml
+widget:
+  type: customapi
+  url: http://subtitlecleanup:8080/api/queue
+  refreshInterval: 10000
+  mappings:
+    - field: count
+      label: Pending
+      format: number
+```
+
+The URL must be reachable from the Homepage server or container. The Compose
+configuration in this repository publishes SubtitleCleanUp only on the host's
+loopback interface, so `http://subtitlecleanup:8080` works only when both services
+share a Docker network with that service name. Otherwise, adjust the URL and
+network or port binding for your deployment.
+
 ## Safety model
 
 Before applying a proposal, every participating file is checked against the size,
