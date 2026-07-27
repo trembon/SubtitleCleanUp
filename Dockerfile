@@ -9,9 +9,9 @@ RUN dotnet restore src/SubtitleCleanUp.Web/SubtitleCleanUp.Web.csproj
 COPY src/ src/
 RUN dotnet publish src/SubtitleCleanUp.Web/SubtitleCleanUp.Web.csproj \
     --configuration Release \
-    --no-restore \
     --output /app/publish \
-    /p:UseAppHost=false
+    /p:UseAppHost=false \
+ && test -f /app/publish/wwwroot/_framework/blazor.web.js
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
@@ -22,6 +22,7 @@ LABEL org.opencontainers.image.description="Review and normalize SRT subtitle na
 
 RUN mkdir -p /data && chown app:app /data
 COPY --from=build --chown=app:app /app/publish .
+RUN test -f /app/wwwroot/_framework/blazor.web.js
 USER app
 
 ENTRYPOINT ["dotnet", "SubtitleCleanUp.Web.dll"]
