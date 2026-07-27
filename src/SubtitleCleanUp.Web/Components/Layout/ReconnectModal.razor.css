@@ -1,6 +1,7 @@
 .components-reconnect-first-attempt-visible,
 .components-reconnect-repeated-attempt-visible,
 .components-reconnect-failed-visible,
+.components-startup-failed-visible,
 .components-pause-visible,
 .components-resume-failed-visible,
 .components-rejoining-animation {
@@ -8,6 +9,8 @@
 }
 
 #components-reconnect-modal.components-reconnect-show .components-reconnect-first-attempt-visible,
+#components-reconnect-modal.components-reconnect-startup-failed,
+#components-reconnect-modal.components-reconnect-startup-failed .components-startup-failed-visible,
 #components-reconnect-modal.components-reconnect-show .components-rejoining-animation,
 #components-reconnect-modal.components-reconnect-paused .components-pause-visible,
 #components-reconnect-modal.components-reconnect-resume-failed .components-resume-failed-visible,
@@ -86,6 +89,13 @@
 #components-reconnect-modal p {
     margin: 0;
     text-align: center;
+}
+
+#components-reconnect-modal code {
+    padding: 0.125rem 0.35rem;
+    border-radius: 0.25rem;
+    background: rgba(17, 24, 21, 0.08);
+    font-size: 0.95em;
 }
 
 #components-reconnect-modal button {

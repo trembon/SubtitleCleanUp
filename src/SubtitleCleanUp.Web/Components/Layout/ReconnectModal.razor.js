@@ -2,13 +2,32 @@
 const reconnectModal = document.getElementById("components-reconnect-modal");
 reconnectModal.addEventListener("components-reconnect-state-changed", handleReconnectStateChanged);
 
+const startupFailureClassName = "components-reconnect-startup-failed";
+const startupCheckDelayMs = 3000;
+
 const retryButton = document.getElementById("components-reconnect-button");
 retryButton.addEventListener("click", retry);
+
+const startupReloadButton = document.getElementById("components-startup-reload-button");
+startupReloadButton.addEventListener("click", reloadPage);
 
 const resumeButton = document.getElementById("components-resume-button");
 resumeButton.addEventListener("click", resume);
 
+window.addEventListener("load", () => {
+    window.setTimeout(() => {
+        if (typeof window.Blazor === "undefined") {
+            reconnectModal.className = startupFailureClassName;
+            reconnectModal.showModal();
+        }
+    }, startupCheckDelayMs);
+}, { once: true });
+
 function handleReconnectStateChanged(event) {
+    if (reconnectModal.classList.contains(startupFailureClassName)) {
+        reconnectModal.classList.remove(startupFailureClassName);
+    }
+
     if (event.detail.state === "show") {
         reconnectModal.showModal();
     } else if (event.detail.state === "hide") {
@@ -22,6 +41,11 @@ function handleReconnectStateChanged(event) {
 
 async function retry() {
     document.removeEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
+
+    if (typeof window.Blazor === "undefined") {
+        reloadPage();
+        return;
+    }
 
     try {
         // Reconnect will asynchronously return:
@@ -38,6 +62,10 @@ async function retry() {
             } else {
                 reconnectModal.close();
             }
+
+function reloadPage() {
+    location.reload();
+}
         }
     } catch (err) {
         // We got an exception, server is currently unavailable

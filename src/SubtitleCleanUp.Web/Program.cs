@@ -13,6 +13,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
+builder.Logging.AddFilter("Microsoft.AspNetCore.Components.Server.Circuits", LogLevel.Debug);
+builder.Logging.AddFilter("Microsoft.AspNetCore.SignalR", LogLevel.Debug);
+builder.Logging.AddFilter("Microsoft.AspNetCore.Http.Connections", LogLevel.Debug);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -82,12 +85,14 @@ builder.Services.AddSingleton<ScanScheduler>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<ScanScheduler>());
 
 var app = builder.Build();
+var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
 
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseStaticFiles();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
@@ -121,6 +126,13 @@ await using (var db = await app.Services
 {
     await db.Database.MigrateAsync();
 }
+
+var blazorBootstrapScriptPath = Path.Combine(app.Environment.WebRootPath ?? string.Empty, "_framework", "blazor.web.js");
+startupLogger.LogInformation(
+    "Web root resolved to {WebRootPath}. Blazor bootstrap script present: {BootstrapScriptPresent} at {BootstrapScriptPath}.",
+    app.Environment.WebRootPath,
+    File.Exists(blazorBootstrapScriptPath),
+    blazorBootstrapScriptPath);
 
 app.Run();
 

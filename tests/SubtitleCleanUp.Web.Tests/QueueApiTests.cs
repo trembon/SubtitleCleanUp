@@ -12,6 +12,10 @@ using SubtitleCleanUp.Web.Data;
 
 namespace SubtitleCleanUp.Web.Tests;
 
+[CollectionDefinition(nameof(QueueApiTestCollection), DisableParallelization = true)]
+public sealed class QueueApiTestCollection;
+
+[Collection(nameof(QueueApiTestCollection))]
 public sealed class QueueApiTests
 {
     [Fact]

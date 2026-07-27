@@ -34,6 +34,17 @@ unrecognized SRT files are shown for manual review and cannot be applied automat
 
 4. Open <http://127.0.0.1:8080>.
 
+5. Verify Blazor interactivity after the container starts:
+
+   - `GET /_framework/blazor.web.js` returns `200 OK`
+   - `POST /_blazor/negotiate?negotiateVersion=1` returns `200 OK`
+   - the **Scan now** button responds in the dashboard
+   - the **Apply selected** button opens its confirmation dialog in the review queue
+
+If the page renders but the buttons do nothing, the Blazor bootstrap script or
+interactive server circuit is not starting correctly. Check the container logs
+for the reported web root and Blazor bootstrap script path.
+
 The Compose example binds only to localhost. Change the port binding deliberately
 if the application must be available elsewhere, preferably behind an authenticated
 reverse proxy.
