@@ -1,0 +1,87 @@
+@page "/history/operations"
+@rendermode InteractiveServer
+@inject IDbContextFactory<SubtitleCleanupDbContext> DbFactory
+
+<PageTitle>File operations · SubtitleCleanUp</PageTitle>
+
+<header class="page-header">
+    <div>
+        <p class="eyebrow">History &amp; recovery</p>
+        <h1>File operations</h1>
+        <p class="lede">Browse the complete record of renames, quarantines, restores, purges, and failed operations.</p>
+    </div>
+</header>
+
+<HistoryNavigation />
+
+<section class="panel history-panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">Complete activity log</p><h2>File operations</h2></div>
+        <span class="badge">@_totalCount operations</span>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">Loading file operations…</div>
+    }
+    else if (_operations.Count == 0)
+    {
+        <div class="empty-state"><span>↺</span><h3>No file operations yet</h3><p>Applied changes and their outcomes will appear here.</p></div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>When</th><th>Operation</th><th>Source</th><th>Destination</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var operation in _operations)
+                    {
+                        <tr>
+                            <td>@operation.OccurredUtc.ToLocalTime().ToString("MMM d, HH:mm")</td>
+                            <td>@operation.Type</td>
+                            <td title="@operation.SourcePath">@Path.GetFileName(operation.SourcePath)</td>
+                            <td title="@operation.DestinationPath">@Path.GetFileName(operation.DestinationPath)</td>
+                            <td><span class="status-pill @operation.Status.ToString().ToLowerInvariant()">@operation.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <HistoryPagination Route="@Route" CurrentPage="@_currentPage" PageSize="@PageSize" TotalCount="@_totalCount" TotalPages="@TotalPages" />
+</section>
+
+@code {
+    private const int PageSize = 25;
+    private const string Route = "/history/operations";
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int Page { get; set; } = 1;
+
+    private List<FileOperationRecord> _operations = [];
+    private int _currentPage = 1;
+    private int _totalCount;
+    private bool _loading = true;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_totalCount / (double)PageSize));
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync(Page);
+
+    private async Task LoadAsync(int requestedPage)
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.FileOperations.AsNoTracking()
+            .OrderByDescending(x => x.OccurredUtc)
+            .ThenByDescending(x => x.Id);
+
+        _totalCount = await query.CountAsync();
+        var page = Math.Clamp(requestedPage, 1, TotalPages);
+        _operations = await query.Skip((page - 1) * PageSize).Take(PageSize).ToListAsync();
+        _currentPage = page;
+        _loading = false;
+    }
+}

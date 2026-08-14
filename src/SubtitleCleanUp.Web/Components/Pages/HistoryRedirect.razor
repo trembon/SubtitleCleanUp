@@ -1,0 +1,8 @@
+@page "/history"
+@rendermode InteractiveServer
+@inject NavigationManager NavigationManager
+
+@code {
+    protected override void OnInitialized() =>
+        NavigationManager.NavigateTo("/history/quarantine", replace: true);
+}

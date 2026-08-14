@@ -1,0 +1,136 @@
+@page "/history/quarantine"
+@rendermode InteractiveServer
+@inject IDbContextFactory<SubtitleCleanupDbContext> DbFactory
+@inject ChangeExecutionService Executor
+
+<PageTitle>Quarantine · SubtitleCleanUp</PageTitle>
+
+<header class="page-header">
+    <div>
+        <p class="eyebrow">History &amp; recovery</p>
+        <h1>Quarantine</h1>
+        <p class="lede">Restore approved duplicate removals or permanently purge them when you are certain.</p>
+    </div>
+</header>
+
+<HistoryNavigation />
+
+@if (_notice is not null)
+{
+    <div class="notice @(_noticeIsError ? "error" : "success")" role="status">@_notice</div>
+}
+
+<section class="panel history-panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">Recoverable files</p><h2>Quarantine</h2></div>
+        <span class="badge">@_totalCount files</span>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">Loading quarantine…</div>
+    }
+    else if (_quarantine.Count == 0)
+    {
+        <div class="empty-state"><span>◇</span><h3>Quarantine is empty</h3><p>Approved duplicate removals will appear here.</p></div>
+    }
+    else
+    {
+        <div class="operation-list">
+            @foreach (var operation in _quarantine)
+            {
+                <div class="operation-row">
+                    <div>
+                        <strong>@Path.GetFileName(operation.SourcePath)</strong>
+                        <small>@operation.Proposal?.MediaStem · @operation.OccurredUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small>
+                        <code title="@operation.SourcePath">@operation.SourcePath</code>
+                    </div>
+                    <div class="operation-actions">
+                        <button class="button secondary small" @onclick="() => RestoreAsync(operation.Id)">Restore</button>
+                        @if (_purgeConfirmation == operation.Id)
+                        {
+                            <button class="button danger small" @onclick="() => PurgeAsync(operation.Id)">Confirm purge</button>
+                            <button class="button ghost small" @onclick="() => _purgeConfirmation = null">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="button ghost small" @onclick="() => _purgeConfirmation = operation.Id">Purge</button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <HistoryPagination Route="@Route" CurrentPage="@_currentPage" PageSize="@PageSize" TotalCount="@_totalCount" TotalPages="@TotalPages" />
+</section>
+
+@code {
+    private const int PageSize = 25;
+    private const string Route = "/history/quarantine";
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int Page { get; set; } = 1;
+
+    private List<FileOperationRecord> _quarantine = [];
+    private int _currentPage = 1;
+    private int _totalCount;
+    private int? _purgeConfirmation;
+    private string? _notice;
+    private bool _noticeIsError;
+    private bool _loading = true;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_totalCount / (double)PageSize));
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync(Page);
+
+    private async Task LoadAsync(int requestedPage)
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.FileOperations.AsNoTracking()
+            .Include(x => x.Proposal)
+            .Where(x => x.Type == OperationType.Quarantine && x.Status == OperationStatus.Applied)
+            .OrderByDescending(x => x.OccurredUtc)
+            .ThenByDescending(x => x.Id);
+
+        _totalCount = await query.CountAsync();
+        var page = Math.Clamp(requestedPage, 1, TotalPages);
+        _quarantine = await query.Skip((page - 1) * PageSize).Take(PageSize).ToListAsync();
+        _currentPage = page;
+        _loading = false;
+    }
+
+    private async Task RestoreAsync(int id)
+    {
+        try
+        {
+            await Executor.RestoreAsync(id);
+            _noticeIsError = false;
+            _notice = "Subtitle restored to its original location.";
+            await LoadAsync(Page);
+        }
+        catch (Exception ex)
+        {
+            _noticeIsError = true;
+            _notice = $"Restore failed: {ex.Message}";
+        }
+    }
+
+    private async Task PurgeAsync(int id)
+    {
+        try
+        {
+            await Executor.PurgeAsync(id);
+            _noticeIsError = false;
+            _notice = "Quarantined file permanently purged.";
+            _purgeConfirmation = null;
+            await LoadAsync(Page);
+        }
+        catch (Exception ex)
+        {
+            _noticeIsError = true;
+            _notice = $"Purge failed: {ex.Message}";
+        }
+    }
+}

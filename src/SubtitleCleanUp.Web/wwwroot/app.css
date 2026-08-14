@@ -152,6 +152,19 @@ code { font-family: var(--font-mono); }
 .subtitle-preview { background: #111815; border-radius: 10px; color: #dce7e0; font-family: var(--font-mono); font-size: .68rem; line-height: 1.65; max-height: 60vh; overflow: auto; padding: 1rem; white-space: pre-wrap; }
 
 .operation-list, .timeline { display: grid; }
+.history-tabs {
+    display: flex; gap: .4rem; margin: 0 auto 1rem; max-width: 1380px; overflow-x: auto;
+}
+.history-tabs a {
+    border: 1px solid transparent; border-radius: 10px; color: var(--muted); flex: 0 0 auto;
+    padding: .7rem .85rem; text-decoration: none;
+}
+.history-tabs a:hover { background: #e9eee9; color: var(--ink); }
+.history-tabs a.active { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.history-tabs a span, .history-tabs a small { display: block; }
+.history-tabs a span { font-size: .76rem; font-weight: 650; }
+.history-tabs a small { font-size: .62rem; margin-top: .2rem; }
+.history-panel { margin: 0 auto; max-width: 1380px; }
 .operation-row { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 1rem; justify-content: space-between; padding: .9rem 0; }
 .operation-row strong, .operation-row small, .operation-row code { display: block; }
 .operation-row strong { font-size: .76rem; }
@@ -173,6 +186,14 @@ th, td { border-top: 1px solid var(--line); padding: .75rem .5rem; }
 .status-pill.applied { background: #e4f5bd; color: #466016; }
 .status-pill.failed { background: #f8d9d6; color: #91352e; }
 .status-pill.purged { background: #e7e7e7; color: #666; }
+.history-pagination {
+    align-items: center; border-top: 1px solid var(--line); display: flex; gap: 1rem;
+    justify-content: space-between; margin-top: 1rem; padding-top: 1rem;
+}
+.pagination-summary, .pagination-page {
+    color: var(--muted); font-family: var(--font-mono); font-size: .68rem;
+}
+.pagination-actions { align-items: center; display: flex; gap: .45rem; }
 
 @media (max-width: 1050px) {
     .metric-grid { grid-template-columns: repeat(2, 1fr); }
@@ -190,4 +211,6 @@ th, td { border-top: 1px solid var(--line); padding: .75rem .5rem; }
     .file-option { align-items: flex-start; flex-wrap: wrap; }
     .file-option .button { margin-left: 2rem; }
     .operation-row { align-items: flex-start; flex-direction: column; }
+    .history-pagination { align-items: flex-start; flex-direction: column; }
+    .pagination-actions { justify-content: space-between; width: 100%; }
 }

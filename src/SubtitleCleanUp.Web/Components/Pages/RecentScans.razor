@@ -1,0 +1,89 @@
+@page "/history/scans"
+@rendermode InteractiveServer
+@inject IDbContextFactory<SubtitleCleanupDbContext> DbFactory
+
+<PageTitle>Recent scans · SubtitleCleanUp</PageTitle>
+
+<header class="page-header">
+    <div>
+        <p class="eyebrow">History &amp; recovery</p>
+        <h1>Recent scans</h1>
+        <p class="lede">Review scanner activity, discovered files, proposed changes, and any warnings from previous runs.</p>
+    </div>
+</header>
+
+<HistoryNavigation />
+
+<section class="panel history-panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">Scanner activity</p><h2>Recent scans</h2></div>
+        <span class="badge">@_totalCount scans</span>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">Loading scans…</div>
+    }
+    else if (_runs.Count == 0)
+    {
+        <div class="empty-state"><span>◌</span><h3>No scans yet</h3><p>Completed and failed scans will appear here.</p></div>
+    }
+    else
+    {
+        <div class="timeline">
+            @foreach (var run in _runs)
+            {
+                <div class="timeline-item">
+                    <span class="timeline-dot @(run.Status == "Failed" ? "failed" : "")"></span>
+                    <div>
+                        <strong>@run.Status</strong>
+                        <small>@run.StartedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · @run.DiscoveredCount files · @run.ProposedCount proposals</small>
+                        @if (run.Error is not null)
+                        {
+                            <p class="error-text">@run.Error</p>
+                        }
+                        @foreach (var issue in run.Issues)
+                        {
+                            <p class="warning-text">@issue.Message</p>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <HistoryPagination Route="@Route" CurrentPage="@_currentPage" PageSize="@PageSize" TotalCount="@_totalCount" TotalPages="@TotalPages" />
+</section>
+
+@code {
+    private const int PageSize = 25;
+    private const string Route = "/history/scans";
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int Page { get; set; } = 1;
+
+    private List<ScanRun> _runs = [];
+    private int _currentPage = 1;
+    private int _totalCount;
+    private bool _loading = true;
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_totalCount / (double)PageSize));
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync(Page);
+
+    private async Task LoadAsync(int requestedPage)
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.ScanRuns.AsNoTracking()
+            .Include(x => x.Issues)
+            .OrderByDescending(x => x.StartedUtc)
+            .ThenByDescending(x => x.Id);
+
+        _totalCount = await query.CountAsync();
+        var page = Math.Clamp(requestedPage, 1, TotalPages);
+        _runs = await query.Skip((page - 1) * PageSize).Take(PageSize).ToListAsync();
+        _currentPage = page;
+        _loading = false;
+    }
+}

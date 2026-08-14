@@ -1,0 +1,40 @@
+@if (TotalCount > 0)
+{
+    <nav class="history-pagination" aria-label="Pagination">
+        <span class="pagination-summary">Showing @FirstItem-@LastItem of @TotalCount</span>
+        @if (TotalPages > 1)
+        {
+            <div class="pagination-actions">
+                @if (CurrentPage > 1)
+                {
+                    <a class="button ghost small" href="@PageUrl(CurrentPage - 1)" aria-label="Go to previous page">Previous</a>
+                }
+                else
+                {
+                    <button class="button ghost small" disabled>Previous</button>
+                }
+                <span class="pagination-page" aria-current="page">Page @CurrentPage of @TotalPages</span>
+                @if (CurrentPage < TotalPages)
+                {
+                    <a class="button ghost small" href="@PageUrl(CurrentPage + 1)" aria-label="Go to next page">Next</a>
+                }
+                else
+                {
+                    <button class="button ghost small" disabled>Next</button>
+                }
+            </div>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter] public string Route { get; set; } = string.Empty;
+    [Parameter] public int CurrentPage { get; set; } = 1;
+    [Parameter] public int PageSize { get; set; } = 25;
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public int TotalPages { get; set; } = 1;
+
+    private int FirstItem => ((CurrentPage - 1) * PageSize) + 1;
+    private int LastItem => Math.Min(CurrentPage * PageSize, TotalCount);
+    private string PageUrl(int page) => $"{Route}?page={page}";
+}

@@ -12,8 +12,8 @@
     display: flex; font-family: var(--font-mono); font-size: .8rem; font-weight: 800;
     height: 38px; justify-content: center; width: 38px;
 }
-.brand strong, .brand small, .safety-note strong, .safety-note small { display: block; }
-.brand small, .safety-note small { color: #8da198; font-size: .7rem; margin-top: .15rem; }
+.brand strong, .brand small { display: block; }
+.brand small { color: #8da198; font-size: .7rem; margin-top: .15rem; }
 nav { display: grid; gap: .35rem; }
 nav ::deep a {
     align-items: center; border-radius: 9px; color: #aebcb6; display: flex; font-size: .88rem;
@@ -22,15 +22,6 @@ nav ::deep a {
 nav ::deep a:hover { background: #19231f; color: #f5f8f7; }
 nav ::deep a.active { background: #243229; color: #d8ff74; }
 nav ::deep a span { font-size: 1.1rem; width: 1.2rem; }
-.safety-note {
-    align-items: flex-start; border-top: 1px solid #26332e; display: flex; gap: .65rem;
-    margin-top: auto; padding: 1.25rem .5rem 0;
-}
-.safety-note strong { color: #dce6e1; font-size: .78rem; }
-.status-dot {
-    background: #d8ff74; border-radius: 50%; box-shadow: 0 0 0 4px rgb(216 255 116 / 12%);
-    height: 8px; margin-top: .25rem; width: 8px;
-}
 .content { min-width: 0; padding: 2rem clamp(1.25rem, 4vw, 4rem) 4rem; }
 #blazor-error-ui {
     background: #712f2f; bottom: 0; color: white; display: none; left: 0;
@@ -43,5 +34,4 @@ nav ::deep a span { font-size: 1.1rem; width: 1.2rem; }
     .brand { padding-bottom: .8rem; }
     nav { display: flex; overflow-x: auto; }
     nav ::deep a { white-space: nowrap; }
-    .safety-note { display: none; }
 }
