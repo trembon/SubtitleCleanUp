@@ -13,7 +13,7 @@
     <div>
         <p class="eyebrow">Library overview</p>
         <h1>Your subtitles, under control.</h1>
-        <p class="lede">Scan for inconsistent language tags and duplicates. Nothing changes until you approve it.</p>
+        <p class="lede">Scan for inconsistent language tags and duplicates. Safe rename-only fixes are applied automatically; duplicates still require approval.</p>
     </div>
     <button class="button primary" disabled="@(_scanning || Gate.IsBusy)" @onclick="ScanNowAsync">
         @(_scanning ? "Scanning…" : "Scan now")

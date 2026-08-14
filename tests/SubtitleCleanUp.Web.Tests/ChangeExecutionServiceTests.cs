@@ -72,6 +72,26 @@ public sealed class ChangeExecutionServiceTests
         File.Exists(Path.Combine(directory.Path, "Movie.en.srt")).ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task ApplyPendingRenames_applies_only_rename_proposals()
+    {
+        using var directory = new TemporaryDirectory();
+        using var factory = new TestDbFactory();
+        var duplicateId = await SeedDuplicateAsync(factory, directory.Path);
+        var renameId = await SeedRenameAsync(factory, directory.Path);
+        var service = CreateService(factory, directory.Path);
+
+        var result = await service.ApplyPendingRenamesAsync();
+
+        result.Applied.ShouldBe(1);
+        result.Stale.ShouldBe(0);
+        result.Failed.ShouldBe(0);
+        File.Exists(Path.Combine(directory.Path, "Movie.eng.srt")).ShouldBeTrue();
+        using var db = factory.CreateDbContext();
+        db.ChangeProposals.Single(x => x.Id == renameId).Status.ShouldBe(ProposalStatus.Applied);
+        db.ChangeProposals.Single(x => x.Id == duplicateId).Status.ShouldBe(ProposalStatus.Pending);
+    }
+
     private static ChangeExecutionService CreateService(TestDbFactory factory, string directory)
     {
         var clock = Substitute.For<ISystemClock>();
@@ -135,6 +155,46 @@ public sealed class ChangeExecutionServiceTests
         db.ChangeProposals.Add(proposal);
         await db.SaveChangesAsync();
         proposal.SelectedKeeperId = proposal.Files[1].Id;
+        await db.SaveChangesAsync();
+        return proposal.Id;
+    }
+
+    private static async Task<int> SeedRenameAsync(TestDbFactory factory, string directory)
+    {
+        var sourcePath = Path.Combine(directory, "Movie.en.srt");
+        await File.WriteAllTextAsync(sourcePath, "subtitle");
+        var fileSystem = new PhysicalSubtitleFileSystem();
+        var info = new FileInfo(sourcePath);
+        await using var db = factory.CreateDbContext();
+        var proposal = new ChangeProposal
+        {
+            GroupKey = "media|Movie|eng",
+            FingerprintSignature = "rename-signature",
+            RootName = "media",
+            DirectoryPath = directory,
+            MediaStem = "Movie",
+            Language = "eng",
+            CanonicalPath = Path.Combine(directory, "Movie.eng.srt"),
+            Kind = ProposalKind.Rename,
+            Status = ProposalStatus.Pending,
+            Reason = "rename",
+            CreatedUtc = DateTimeOffset.UtcNow,
+            LastSeenUtc = DateTimeOffset.UtcNow,
+            Files =
+            [
+                new SubtitleFileRecord
+                {
+                    RootName = "media", RootPath = directory, FullPath = sourcePath,
+                    RelativePath = "Movie.en.srt", FileName = "Movie.en.srt",
+                    Size = info.Length, LastWriteUtc = info.LastWriteTimeUtc,
+                    Sha256 = await fileSystem.ComputeSha256Async(sourcePath, CancellationToken.None),
+                    IsRecommended = true
+                }
+            ]
+        };
+        db.ChangeProposals.Add(proposal);
+        await db.SaveChangesAsync();
+        proposal.SelectedKeeperId = proposal.Files[0].Id;
         await db.SaveChangesAsync();
         return proposal.Id;
     }

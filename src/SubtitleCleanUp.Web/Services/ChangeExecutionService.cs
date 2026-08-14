@@ -47,6 +47,51 @@ public sealed class ChangeExecutionService(
         var proposal = await db.ChangeProposals
             .Include(x => x.Files)
             .SingleAsync(x => x.Id == proposalId, cancellationToken);
+        await ApplyProposalAsync(db, proposal, cancellationToken);
+    }
+
+    public async Task<AutomaticRenameResult> ApplyPendingRenamesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        using var lease = await gate.EnterAsync(cancellationToken);
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var proposals = await db.ChangeProposals
+            .Include(x => x.Files)
+            .Where(x => x.Status == ProposalStatus.Pending && x.Kind == ProposalKind.Rename)
+            .OrderBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+        var result = new AutomaticRenameResult();
+
+        foreach (var proposal in proposals)
+        {
+            try
+            {
+                await ApplyProposalAsync(db, proposal, cancellationToken);
+                result.Applied++;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException)
+            {
+                if (proposal.Status == ProposalStatus.Stale)
+                {
+                    result.Stale++;
+                }
+                else
+                {
+                    result.Failed++;
+                }
+
+                logger.LogWarning(ex, "Automatic rename proposal {ProposalId} was not applied.", proposal.Id);
+            }
+        }
+
+        return result;
+    }
+
+    private async Task ApplyProposalAsync(
+        SubtitleCleanupDbContext db,
+        ChangeProposal proposal,
+        CancellationToken cancellationToken)
+    {
         if (proposal.Status != ProposalStatus.Pending || proposal.Kind == ProposalKind.ManualReview)
         {
             throw new InvalidOperationException("Only pending rename and duplicate proposals can be applied.");
@@ -127,7 +172,7 @@ public sealed class ChangeExecutionService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to apply proposal {ProposalId}.", proposalId);
+            logger.LogError(ex, "Failed to apply proposal {ProposalId}.", proposal.Id);
             proposal.Status = ProposalStatus.Failed;
             proposal.FailureMessage = ex.Message;
             proposal.Operations.Add(new FileOperationRecord
@@ -261,4 +306,11 @@ public sealed class ChangeExecutionService(
         string.Concat(value.Select(x => Path.GetInvalidFileNameChars().Contains(x) ? '_' : x));
 
     private sealed class StaleProposalException(string message) : Exception(message);
+}
+
+public sealed class AutomaticRenameResult
+{
+    public int Applied { get; set; }
+    public int Stale { get; set; }
+    public int Failed { get; set; }
 }

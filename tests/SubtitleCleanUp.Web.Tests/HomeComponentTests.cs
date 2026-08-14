@@ -42,6 +42,13 @@ public sealed class HomeComponentTests
             options,
             clock,
             gate,
+            new ChangeExecutionService(
+                factory,
+                Substitute.For<ISubtitleFileSystem>(),
+                Options.Create(new SubtitleCleanupOptions { QuarantineRoot = "/quarantine" }),
+                clock,
+                gate,
+                NullLogger<ChangeExecutionService>.Instance),
             NullLogger<ScanCoordinator>.Instance);
         var scheduler = new ScanScheduler(
             coordinator,

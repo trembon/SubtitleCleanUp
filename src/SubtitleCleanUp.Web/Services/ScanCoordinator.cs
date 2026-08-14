@@ -14,6 +14,7 @@ public sealed class ScanCoordinator(
     IOptions<SubtitleCleanupOptions> options,
     ISystemClock clock,
     OperationGate gate,
+    ChangeExecutionService executor,
     ILogger<ScanCoordinator> logger)
 {
     public async Task<int> ScanAsync(CancellationToken cancellationToken = default)
@@ -75,6 +76,19 @@ public sealed class ScanCoordinator(
             run.CompletedUtc = clock.UtcNow;
             run.Status = discovery.Errors.Count == 0 ? "Completed" : "CompletedWithWarnings";
             await db.SaveChangesAsync(cancellationToken);
+
+            // Release the scan lease before the rename processor acquires it.
+            lease.Dispose();
+            var renameResult = await executor.ApplyPendingRenamesAsync(cancellationToken);
+            if (renameResult.Applied > 0 || renameResult.Stale > 0 || renameResult.Failed > 0)
+            {
+                logger.LogInformation(
+                    "Automatically processed subtitle renames: {Applied} applied, {Stale} stale, {Failed} failed.",
+                    renameResult.Applied,
+                    renameResult.Stale,
+                    renameResult.Failed);
+            }
+
             return run.Id;
         }
         catch (Exception ex)

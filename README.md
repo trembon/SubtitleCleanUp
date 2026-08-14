@@ -1,8 +1,9 @@
 # SubtitleCleanUp
 
 SubtitleCleanUp is a self-hosted .NET 10 Blazor application that finds inconsistent
-SRT language tags and duplicate subtitles. Scans only create review proposals.
-Files are changed only after explicit approval in the web interface.
+SRT language tags and duplicate subtitles. Scans create review proposals for
+duplicates and ambiguous files, while unambiguous rename-only fixes are applied
+automatically after each scan.
 
 ## Naming behavior
 
@@ -126,7 +127,8 @@ ASP.NET Core's environment-variable format is used:
 | `ConnectionStrings__SubtitleCleanup` | SQLite connection string |
 
 Add additional roots with `Roots__1`, `Roots__2`, and so on, and add corresponding
-volume mounts. Scheduled scans never apply proposals.
+volume mounts. Scheduled scans automatically apply only rename-only proposals.
+Duplicate and manual-review proposals always require explicit approval.
 
 ## Public API
 
@@ -138,8 +140,8 @@ volume mounts. Scheduled scans never apply proposals.
 }
 ```
 
-The count matches the application's **Needs review** metric. Each pending rename,
-duplicate group, or manual-review proposal counts once, regardless of how many
+The count matches the application's **Needs review** metric. Each pending duplicate
+group or manual-review proposal counts once, regardless of how many
 subtitle files belong to it. Dismissed, stale, applying, applied, and failed
 proposals are excluded. The endpoint is read-only and does not require
 authentication.
