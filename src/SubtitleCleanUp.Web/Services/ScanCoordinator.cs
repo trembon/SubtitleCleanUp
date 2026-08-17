@@ -44,6 +44,12 @@ public sealed class ScanCoordinator(
                 if (existing is not null)
                 {
                     existing.LastSeenUtc = now;
+                    if (existing.Kind != ProposalKind.ManualReview &&
+                        existing.Files.All(x => x.Id != existing.SelectedKeeperId))
+                    {
+                        existing.SelectedKeeperId = existing.Files.FirstOrDefault(x => x.IsRecommended)?.Id
+                            ?? existing.Files.FirstOrDefault()?.Id;
+                    }
                     existing.Reason = draft.Reason;
                     seenIds.Add(existing.Id);
                     continue;

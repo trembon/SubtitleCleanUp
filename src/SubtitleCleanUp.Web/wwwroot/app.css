@@ -129,6 +129,8 @@ code { font-family: var(--font-mono); }
 .file-options { border-top: 1px solid var(--line); }
 .file-option { align-items: center; border-bottom: 1px solid #e7ebe7; display: flex; gap: .8rem; padding: .8rem 1.2rem; }
 .file-option.selected { background: #f5f9eb; }
+.file-selection { align-items: center; cursor: pointer; display: flex; flex: 1; gap: .8rem; min-width: 0; }
+.file-selection:hover { color: #486313; }
 .file-details { flex: 1; min-width: 0; }
 .file-details strong { font-family: var(--font-mono); font-size: .72rem; }
 .file-details small { color: var(--muted); display: block; font-size: .64rem; margin-top: .3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

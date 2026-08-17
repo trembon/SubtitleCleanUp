@@ -68,21 +68,31 @@ else
                         <div class="file-option @(proposal.SelectedKeeperId == file.Id ? "selected" : "")">
                             @if (proposal.Kind != ProposalKind.ManualReview)
                             {
-                                <input type="radio" aria-label="Keep @file.FileName" name="keeper-@proposal.Id"
-                                       checked="@(proposal.SelectedKeeperId == file.Id)" @onchange="() => SelectKeeperAsync(proposal.Id, file.Id)" />
+                                <label class="file-selection">
+                                    <input type="radio" aria-label="Keep @file.FileName" name="keeper-@proposal.Id"
+                                           checked="@(proposal.SelectedKeeperId == file.Id)" @onchange="() => SelectKeeperAsync(proposal.Id, file.Id)" />
+                                    <div class="file-details">
+                                        <div>
+                                            <strong>@file.FileName</strong>
+                                            @if (file.IsRecommended) { <span class="badge">Recommended</span> }
+                                            @if (file.IsCanonical) { <span class="badge neutral">Canonical</span> }
+                                        </div>
+                                        <small>@FormatSize(file.Size) · @file.LastWriteUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · <span title="@file.FullPath">@file.RelativePath</span></small>
+                                    </div>
+                                </label>
                             }
                             else
                             {
                                 <span class="manual-dot"></span>
-                            }
-                            <div class="file-details">
-                                <div>
-                                    <strong>@file.FileName</strong>
-                                    @if (file.IsRecommended) { <span class="badge">Recommended</span> }
-                                    @if (file.IsCanonical) { <span class="badge neutral">Canonical</span> }
+                                <div class="file-details">
+                                    <div>
+                                        <strong>@file.FileName</strong>
+                                        @if (file.IsRecommended) { <span class="badge">Recommended</span> }
+                                        @if (file.IsCanonical) { <span class="badge neutral">Canonical</span> }
+                                    </div>
+                                    <small>@FormatSize(file.Size) · @file.LastWriteUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · <span title="@file.FullPath">@file.RelativePath</span></small>
                                 </div>
-                                <small>@FormatSize(file.Size) · @file.LastWriteUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · <span title="@file.FullPath">@file.RelativePath</span></small>
-                            </div>
+                            }
                             <button class="button ghost small" @onclick="() => ShowPreviewAsync(file.Id, file.FileName)">Preview</button>
                         </div>
                     }
@@ -158,6 +168,31 @@ else
         _proposals = await db.ChangeProposals.AsNoTracking().Include(x => x.Files)
             .Where(x => x.Status == ProposalStatus.Pending)
             .OrderByDescending(x => x.Kind == ProposalKind.Duplicate).ThenBy(x => x.MediaStem).ToListAsync();
+        var repairedSelection = false;
+        foreach (var proposal in _proposals.Where(x => x.Kind != ProposalKind.ManualReview))
+        {
+            if (proposal.Files.Any(x => x.Id == proposal.SelectedKeeperId))
+            {
+                continue;
+            }
+
+            proposal.SelectedKeeperId = proposal.Files.FirstOrDefault(x => x.IsRecommended)?.Id
+                ?? proposal.Files.FirstOrDefault()?.Id;
+            repairedSelection = repairedSelection || proposal.SelectedKeeperId is not null;
+        }
+        if (repairedSelection)
+        {
+            await using var updateDb = await DbFactory.CreateDbContextAsync();
+            foreach (var proposal in _proposals.Where(x => x.SelectedKeeperId is not null))
+            {
+                var stored = await updateDb.ChangeProposals.FindAsync(proposal.Id);
+                if (stored is not null && stored.SelectedKeeperId != proposal.SelectedKeeperId)
+                {
+                    stored.SelectedKeeperId = proposal.SelectedKeeperId;
+                }
+            }
+            await updateDb.SaveChangesAsync();
+        }
         _selected.RemoveWhere(id => _proposals.All(x => x.Id != id));
         _loading = false;
     }
