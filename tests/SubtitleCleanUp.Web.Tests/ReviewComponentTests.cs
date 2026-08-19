@@ -112,6 +112,26 @@ public sealed class ReviewComponentTests
                     }
                 ]
             });
+            db.ChangeProposals.Add(new Data.ChangeProposal
+            {
+                GroupKey = "manual-2",
+                FingerprintSignature = "fingerprint-2",
+                RootName = "media",
+                DirectoryPath = "/media",
+                MediaStem = "file-two",
+                Language = null,
+                CanonicalPath = null,
+                Kind = Core.Models.ProposalKind.ManualReview,
+                Reason = "manual",
+                Files =
+                [
+                    new Data.SubtitleFileRecord
+                    {
+                        FileName = "file-two.srt", RelativePath = "file-two.srt",
+                        FullPath = "/media/file-two.srt", RootName = "media", RootPath = "/media"
+                    }
+                ]
+            });
             db.SaveChanges();
         }
 
@@ -135,6 +155,14 @@ public sealed class ReviewComponentTests
         component.Markup.ShouldContain("Delete");
         component.FindAll("button").Single(x => x.TextContent.Contains("Select all visible"))
             .HasAttribute("disabled").ShouldBeTrue();
-        component.Find("label.select-proposal").TextContent.ShouldContain("file");
+        component.FindAll("input[type=checkbox]").ShouldAllBe(x => !x.HasAttribute("disabled"));
+
+        component.Find("input[placeholder]").Input("file");
+        component.FindAll("button").Single(x => x.TextContent.Contains("Select all visible")).Click();
+
+        component.Markup.ShouldContain("Rename selected (2)");
+        component.Markup.ShouldContain("Delete selected (2)");
+        component.FindAll("button").Single(x => x.TextContent.Contains("Rename selected"))
+            .HasAttribute("disabled").ShouldBeTrue();
     }
 }

@@ -14,7 +14,17 @@
     </div>
     <div class="header-actions">
         <span class="selection-count">@_selected.Count selected</span>
-        <button class="button primary" disabled="@(_selected.Count == 0)" @onclick="BeginApply">Apply selected</button>
+        @if (SelectedAutomaticCount > 0)
+        {
+            <button class="button primary" @onclick="BeginApply">Apply selected (@SelectedAutomaticCount)</button>
+        }
+        @if (SelectedManualCount > 0)
+        {
+            <button class="button secondary" disabled="@(!CanRenameSelectedManual)" @onclick="RenameSelectedManualAsync">
+                Rename selected (@SelectedManualCount)
+            </button>
+            <button class="button danger" @onclick="QuarantineSelectedManualAsync">Delete selected (@SelectedManualCount)</button>
+        }
     </div>
 </header>
 
@@ -51,7 +61,7 @@ else
             <article class="review-card">
                 <div class="review-card-header">
                     <label class="select-proposal" title="Select proposal">
-                        <input type="checkbox" disabled="@(proposal.Kind == ProposalKind.ManualReview)"
+                         <input type="checkbox"
                                checked="@_selected.Contains(proposal.Id)" @onchange="e => ToggleSelected(proposal.Id, e)" />
                         <div class="proposal-title">
                          <span class="file-kind @(proposal.Kind == ProposalKind.Duplicate ? "warning" : proposal.Kind == ProposalKind.ManualReview ? "manual" : "")">
@@ -125,7 +135,7 @@ else
     <div class="modal-backdrop" role="presentation">
         <section class="modal confirmation" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
             <p class="eyebrow">Final confirmation</p>
-            <h2 id="confirm-title">Apply @_selected.Count selected changes?</h2>
+            <h2 id="confirm-title">Apply @SelectedAutomaticCount selected changes?</h2>
             <p>Duplicates will move to quarantine and remain recoverable. Keepers will receive their canonical names.</p>
             <div class="confirmation-summary"><strong>@SelectedFileCount files reviewed</strong><span>No unselected proposal will be changed.</span></div>
             <div class="modal-actions">
@@ -171,8 +181,13 @@ else
          (x.Language?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
          x.Files.Any(f => f.RelativePath.Contains(_search, StringComparison.OrdinalIgnoreCase))));
     private bool FilterActive => !string.IsNullOrWhiteSpace(_search) || !string.IsNullOrWhiteSpace(_kindFilter);
-    private bool CanSelectAllVisible => FilterActive && Filtered.Any(x => x.Kind != ProposalKind.ManualReview);
-    private int SelectedFileCount => _proposals.Where(x => _selected.Contains(x.Id)).Sum(x => x.Files.Count);
+    private bool CanSelectAllVisible => FilterActive && Filtered.Any();
+    private IEnumerable<ChangeProposal> SelectedProposals => _proposals.Where(x => _selected.Contains(x.Id));
+    private int SelectedAutomaticCount => SelectedProposals.Count(x => x.Kind != ProposalKind.ManualReview);
+    private int SelectedManualCount => SelectedProposals.Count(x => x.Kind == ProposalKind.ManualReview);
+    private bool CanRenameSelectedManual => SelectedManualCount > 0 &&
+        SelectedProposals.Where(x => x.Kind == ProposalKind.ManualReview).All(x => x.CanonicalPath is not null);
+    private int SelectedFileCount => SelectedProposals.Where(x => x.Kind != ProposalKind.ManualReview).Sum(x => x.Files.Count);
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
     private async Task LoadAsync()
@@ -213,7 +228,7 @@ else
     private void ToggleSelected(int id, ChangeEventArgs args) { if (args.Value is true) _selected.Add(id); else _selected.Remove(id); }
     private void SelectAllVisible()
     {
-        foreach (var proposal in Filtered.Where(x => x.Kind != ProposalKind.ManualReview))
+        foreach (var proposal in Filtered)
         {
             _selected.Add(proposal.Id);
         }
@@ -235,6 +250,47 @@ else
     private async Task QuarantineManualAsync(int id) => await RunManualActionAsync(
         () => Executor.QuarantineManualAsync(id),
         "Subtitle moved to quarantine and remains recoverable.");
+    private async Task RenameSelectedManualAsync()
+    {
+        if (!CanRenameSelectedManual)
+        {
+            return;
+        }
+
+        await RunSelectedManualActionAsync(
+            id => Executor.RenameManualAsync(id),
+            "Selected subtitles renamed to their closest matching languages.");
+    }
+    private async Task QuarantineSelectedManualAsync() => await RunSelectedManualActionAsync(
+        id => Executor.QuarantineManualAsync(id),
+        "Selected subtitles moved to quarantine and remain recoverable.");
+    private async Task RunSelectedManualActionAsync(
+        Func<int, Task> action,
+        string successMessage)
+    {
+        var ids = SelectedProposals
+            .Where(x => x.Kind == ProposalKind.ManualReview)
+            .Select(x => x.Id)
+            .ToArray();
+        try
+        {
+            foreach (var id in ids)
+            {
+                await action(id);
+            }
+
+            foreach (var id in ids) { _selected.Remove(id); }
+            _noticeIsError = false;
+            _notice = successMessage;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _noticeIsError = true;
+            _notice = $"The manual action failed: {ex.Message}";
+            await LoadAsync();
+        }
+    }
     private async Task RunManualActionAsync(Func<Task> action, string successMessage)
     {
         try
@@ -250,19 +306,20 @@ else
             _notice = $"The manual action failed: {ex.Message}";
         }
     }
-    private void BeginApply() => _confirming = _selected.Count > 0;
+    private void BeginApply() => _confirming = SelectedAutomaticCount > 0;
     private void ApplyOne(int id) { _selected.Clear(); _selected.Add(id); _confirming = true; }
     private async Task ApplySelectedAsync()
     {
         _applying = true; _notice = null;
-        foreach (var id in _selected.ToArray())
+        var ids = SelectedProposals.Where(x => x.Kind != ProposalKind.ManualReview).Select(x => x.Id).ToArray();
+        foreach (var id in ids)
         {
             try { await Executor.ApplyAsync(id); }
             catch (Exception ex) { _noticeIsError = true; _notice = $"A change could not be applied: {ex.Message}"; break; }
         }
         _confirming = false; _applying = false;
         if (_notice is null) { _noticeIsError = false; _notice = "Approved changes applied. Quarantined files remain recoverable."; }
-        _selected.Clear();
+        foreach (var id in ids) { _selected.Remove(id); }
         await LoadAsync();
     }
     private async Task ShowPreviewAsync(int id, string name)
