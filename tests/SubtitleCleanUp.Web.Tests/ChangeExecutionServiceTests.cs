@@ -92,6 +92,46 @@ public sealed class ChangeExecutionServiceTests
         db.ChangeProposals.Single(x => x.Id == duplicateId).Status.ShouldBe(ProposalStatus.Pending);
     }
 
+    [Fact]
+    public async Task RenameManual_renames_file_and_records_operation()
+    {
+        using var directory = new TemporaryDirectory();
+        using var factory = new TestDbFactory();
+        var sourcePath = Path.Combine(directory.Path, "file.2.es.srt");
+        var destinationPath = Path.Combine(directory.Path, "file.spa.srt");
+        var proposalId = await SeedManualAsync(factory, sourcePath, destinationPath, "file.2.es.srt");
+        var service = CreateService(factory, directory.Path);
+
+        await service.RenameManualAsync(proposalId);
+
+        File.Exists(sourcePath).ShouldBeFalse();
+        File.Exists(destinationPath).ShouldBeTrue();
+        using var db = factory.CreateDbContext();
+        var proposal = db.ChangeProposals.Single(x => x.Id == proposalId);
+        proposal.Status.ShouldBe(ProposalStatus.Applied);
+        db.FileOperations.Single(x => x.ChangeProposalId == proposalId).Type.ShouldBe(OperationType.Rename);
+    }
+
+    [Fact]
+    public async Task QuarantineManual_moves_file_to_recoverable_quarantine()
+    {
+        using var directory = new TemporaryDirectory();
+        using var factory = new TestDbFactory();
+        var sourcePath = Path.Combine(directory.Path, "file.srt");
+        var proposalId = await SeedManualAsync(factory, sourcePath, null, "file.srt");
+        var service = CreateService(factory, directory.Path);
+
+        await service.QuarantineManualAsync(proposalId);
+
+        File.Exists(sourcePath).ShouldBeFalse();
+        using var db = factory.CreateDbContext();
+        var proposal = db.ChangeProposals.Single(x => x.Id == proposalId);
+        proposal.Status.ShouldBe(ProposalStatus.Applied);
+        var operation = db.FileOperations.Single(x => x.ChangeProposalId == proposalId);
+        operation.Type.ShouldBe(OperationType.Quarantine);
+        File.Exists(operation.DestinationPath).ShouldBeTrue();
+    }
+
     private static ChangeExecutionService CreateService(TestDbFactory factory, string directory)
     {
         var clock = Substitute.For<ISystemClock>();
@@ -195,6 +235,47 @@ public sealed class ChangeExecutionServiceTests
         db.ChangeProposals.Add(proposal);
         await db.SaveChangesAsync();
         proposal.SelectedKeeperId = proposal.Files[0].Id;
+        await db.SaveChangesAsync();
+        return proposal.Id;
+    }
+
+    private static async Task<int> SeedManualAsync(
+        TestDbFactory factory,
+        string sourcePath,
+        string? destinationPath,
+        string fileName)
+    {
+        await File.WriteAllTextAsync(sourcePath, "manual subtitle");
+        var fileSystem = new PhysicalSubtitleFileSystem();
+        var info = new FileInfo(sourcePath);
+        await using var db = factory.CreateDbContext();
+        var proposal = new ChangeProposal
+        {
+            GroupKey = $"manual|{fileName}",
+            FingerprintSignature = "manual-signature",
+            RootName = "media",
+            DirectoryPath = Path.GetDirectoryName(sourcePath)!,
+            MediaStem = "file",
+            Language = destinationPath is null ? null : "spa",
+            CanonicalPath = destinationPath,
+            Kind = ProposalKind.ManualReview,
+            Status = ProposalStatus.Pending,
+            Reason = "manual",
+            CreatedUtc = DateTimeOffset.UtcNow,
+            LastSeenUtc = DateTimeOffset.UtcNow,
+            Files =
+            [
+                new SubtitleFileRecord
+                {
+                    RootName = "media", RootPath = Path.GetDirectoryName(sourcePath)!, FullPath = sourcePath,
+                    RelativePath = fileName, FileName = fileName, Size = info.Length,
+                    LastWriteUtc = info.LastWriteTimeUtc,
+                    Sha256 = await fileSystem.ComputeSha256Async(sourcePath, CancellationToken.None),
+                    IsRecommended = true
+                }
+            ]
+        };
+        db.ChangeProposals.Add(proposal);
         await db.SaveChangesAsync();
         return proposal.Id;
     }

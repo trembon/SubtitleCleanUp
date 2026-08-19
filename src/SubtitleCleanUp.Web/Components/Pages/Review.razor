@@ -31,6 +31,7 @@
         <option value="@ProposalKind.Rename">Renames</option>
         <option value="@ProposalKind.ManualReview">Manual review</option>
     </select>
+    <button class="button secondary small" disabled="@(!CanSelectAllVisible)" @onclick="SelectAllVisible">Select all visible</button>
     <span class="result-count">@Filtered.Count() proposals</span>
 </div>
 
@@ -52,13 +53,13 @@ else
                     <label class="select-proposal" title="Select proposal">
                         <input type="checkbox" disabled="@(proposal.Kind == ProposalKind.ManualReview)"
                                checked="@_selected.Contains(proposal.Id)" @onchange="e => ToggleSelected(proposal.Id, e)" />
+                        <div class="proposal-title">
+                         <span class="file-kind @(proposal.Kind == ProposalKind.Duplicate ? "warning" : proposal.Kind == ProposalKind.ManualReview ? "manual" : "")">
+                             @(proposal.Kind == ProposalKind.Duplicate ? "DUP" : proposal.Kind == ProposalKind.Rename ? "REN" : "CHK")
+                         </span>
+                         <div><h2>@proposal.MediaStem</h2><p>@proposal.RootName · @proposal.Language@Variant(proposal.Variant)</p></div>
+                        </div>
                     </label>
-                    <div class="proposal-title">
-                        <span class="file-kind @(proposal.Kind == ProposalKind.Duplicate ? "warning" : proposal.Kind == ProposalKind.ManualReview ? "manual" : "")">
-                            @(proposal.Kind == ProposalKind.Duplicate ? "DUP" : proposal.Kind == ProposalKind.Rename ? "REN" : "CHK")
-                        </span>
-                        <div><h2>@proposal.MediaStem</h2><p>@proposal.RootName · @proposal.Language@Variant(proposal.Variant)</p></div>
-                    </div>
                     <div class="canonical-target"><span>Canonical target</span><code>@(proposal.CanonicalPath is null ? "Manual inspection" : Path.GetFileName(proposal.CanonicalPath))</code></div>
                 </div>
                 <p class="reason">@proposal.Reason</p>
@@ -94,6 +95,16 @@ else
                                 </div>
                             }
                             <button class="button ghost small" @onclick="() => ShowPreviewAsync(file.Id, file.FileName)">Preview</button>
+                            @if (proposal.Kind == ProposalKind.ManualReview)
+                            {
+                                @if (proposal.CanonicalPath is not null)
+                                {
+                                    <button class="button secondary small" @onclick="() => RenameManualAsync(proposal.Id)">
+                                        Rename to @DisplayLanguage(proposal.Language) (@proposal.Language)
+                                    </button>
+                                }
+                                <button class="button danger small" @onclick="() => QuarantineManualAsync(proposal.Id)">Delete</button>
+                            }
                         </div>
                     }
                 </div>
@@ -159,6 +170,8 @@ else
         (string.IsNullOrWhiteSpace(_search) || x.MediaStem.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
          (x.Language?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false) ||
          x.Files.Any(f => f.RelativePath.Contains(_search, StringComparison.OrdinalIgnoreCase))));
+    private bool FilterActive => !string.IsNullOrWhiteSpace(_search) || !string.IsNullOrWhiteSpace(_kindFilter);
+    private bool CanSelectAllVisible => FilterActive && Filtered.Any(x => x.Kind != ProposalKind.ManualReview);
     private int SelectedFileCount => _proposals.Where(x => _selected.Contains(x.Id)).Sum(x => x.Files.Count);
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
@@ -198,6 +211,13 @@ else
     }
 
     private void ToggleSelected(int id, ChangeEventArgs args) { if (args.Value is true) _selected.Add(id); else _selected.Remove(id); }
+    private void SelectAllVisible()
+    {
+        foreach (var proposal in Filtered.Where(x => x.Kind != ProposalKind.ManualReview))
+        {
+            _selected.Add(proposal.Id);
+        }
+    }
     private async Task SelectKeeperAsync(int proposalId, int fileId)
     {
         await Executor.SelectKeeperAsync(proposalId, fileId);
@@ -208,6 +228,27 @@ else
         await Executor.DismissAsync(id);
         _noticeIsError = false; _notice = "Proposal dismissed until its files change.";
         await LoadAsync();
+    }
+    private async Task RenameManualAsync(int id) => await RunManualActionAsync(
+        () => Executor.RenameManualAsync(id),
+        "Subtitle renamed to its closest matching language.");
+    private async Task QuarantineManualAsync(int id) => await RunManualActionAsync(
+        () => Executor.QuarantineManualAsync(id),
+        "Subtitle moved to quarantine and remains recoverable.");
+    private async Task RunManualActionAsync(Func<Task> action, string successMessage)
+    {
+        try
+        {
+            await action();
+            _noticeIsError = false;
+            _notice = successMessage;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _noticeIsError = true;
+            _notice = $"The manual action failed: {ex.Message}";
+        }
     }
     private void BeginApply() => _confirming = _selected.Count > 0;
     private void ApplyOne(int id) { _selected.Clear(); _selected.Add(id); _confirming = true; }
@@ -232,4 +273,5 @@ else
     private void ClosePreview() { _preview = null; _previewError = null; }
     private static string FormatSize(long bytes) => bytes >= 1048576 ? $"{bytes / 1048576d:F1} MB" : $"{Math.Max(1, bytes / 1024d):F1} KB";
     private static string Variant(string? value) => value is null ? string.Empty : $" · {value}";
+    private static string DisplayLanguage(string? code) => code is null ? "matching language" : IsoLanguageCatalog.DisplayName(code);
 }

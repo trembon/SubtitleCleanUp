@@ -57,4 +57,21 @@ public sealed class SubtitleFilenameParserTests
         result.MediaStem.ShouldBe("A.Movie");
         result.CanonicalFileName.ShouldBe("A.Movie.eng.srt");
     }
+
+    [Theory]
+    [InlineData("file.17.srt", null, null)]
+    [InlineData("file.2.es.srt", "spa", "file.spa.srt")]
+    [InlineData("file.srt", null, null)]
+    [InlineData("file..eng(2).srt", "eng", "file.eng.srt")]
+    public void Analyze_recovers_language_from_manual_names(
+        string fileName,
+        string? language,
+        string? canonical)
+    {
+        var result = _parser.Analyze(fileName, ["file"]);
+
+        result.ShouldNotBeNull();
+        result.Language.ShouldBe(language);
+        result.CanonicalFileName.ShouldBe(canonical);
+    }
 }

@@ -38,6 +38,12 @@ public sealed record ParsedSubtitleName(
     string CanonicalFileName,
     bool IsCanonical);
 
+public sealed record ManualSubtitleName(
+    string? MediaStem,
+    string? Language,
+    string? Variant,
+    string? CanonicalFileName);
+
 public sealed record SubtitleFingerprint(long Size, DateTime LastWriteUtc, string Sha256);
 
 public sealed record DiscoveredSubtitle(

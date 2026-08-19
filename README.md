@@ -21,6 +21,9 @@ automatically after each scan.
 A subtitle must have a matching video stem in the same directory. Supported video
 extensions are MKV, MP4, AVI, MOV, M4V, WEBM, WMV, TS, and M2TS. Ambiguous or
 unrecognized SRT files are shown for manual review and cannot be applied automatically.
+When a language can still be identified, the review page offers a canonical rename
+with both its human name and ISO code; every manual-review file can also be moved to
+recoverable quarantine.
 
 ## Run with Docker Compose
 

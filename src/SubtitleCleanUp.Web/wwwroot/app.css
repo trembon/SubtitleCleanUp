@@ -117,10 +117,12 @@ code { font-family: var(--font-mono); }
 .review-list { display: grid; gap: 1rem; margin: 0 auto; max-width: 1380px; }
 .review-card { padding: 0; }
 .review-card-header { align-items: center; display: grid; gap: .9rem; grid-template-columns: auto minmax(0, 1fr) auto; padding: 1.1rem 1.2rem .7rem; }
+.select-proposal { align-items: center; cursor: pointer; display: flex; gap: .7rem; min-width: 0; }
 .select-proposal input, .file-option input { accent-color: #547018; height: 16px; width: 16px; }
 .proposal-title { align-items: center; display: flex; gap: .7rem; }
 .proposal-title h2 { margin: 0; }
 .proposal-title p { color: var(--muted); font-size: .68rem; margin: .15rem 0 0; }
+.select-proposal:hover .proposal-title h2 { color: #486313; }
 .canonical-target { min-width: 180px; text-align: right; }
 .canonical-target span, .canonical-target code { display: block; }
 .canonical-target span { color: var(--muted); font-size: .6rem; margin-bottom: .25rem; text-transform: uppercase; }

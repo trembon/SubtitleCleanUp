@@ -58,6 +58,7 @@ public sealed class SubtitleScanner(
                         var info = fileSystem.GetFileInfo(path);
                         var relative = Path.GetRelativePath(root.Path, path);
                         var parsed = parser.Parse(info.Name, mediaStems);
+                        var manual = parsed is null ? parser.Analyze(info.Name, mediaStems) : null;
                         var fingerprint = new SubtitleFingerprint(
                             info.Length,
                             info.LastWriteTimeUtc,
@@ -68,10 +69,12 @@ public sealed class SubtitleScanner(
                             Path.GetFullPath(path),
                             relative,
                             info.Name,
-                            parsed?.MediaStem,
-                            parsed?.Language,
-                            parsed?.Variant,
-                            parsed is null ? null : Path.Combine(directory, parsed.CanonicalFileName),
+                            parsed?.MediaStem ?? manual?.MediaStem,
+                            parsed?.Language ?? manual?.Language,
+                            parsed?.Variant ?? manual?.Variant,
+                            parsed is null
+                                ? manual?.CanonicalFileName is null ? null : Path.Combine(directory, manual.CanonicalFileName)
+                                : Path.Combine(directory, parsed.CanonicalFileName),
                             parsed?.IsCanonical ?? false,
                             fingerprint,
                             parsed is null

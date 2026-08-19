@@ -40,6 +40,84 @@ public sealed class ChangeExecutionService(
         }
     }
 
+    public async Task RenameManualAsync(int proposalId, CancellationToken cancellationToken = default)
+    {
+        using var lease = await gate.EnterAsync(cancellationToken);
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var proposal = await db.ChangeProposals.Include(x => x.Files)
+            .SingleAsync(x => x.Id == proposalId, cancellationToken);
+        var file = await ValidateManualAsync(proposal, cancellationToken);
+        if (proposal.CanonicalPath is null)
+        {
+            throw new InvalidOperationException("No matching language was found for this subtitle.");
+        }
+
+        if (fileSystem.FileExists(proposal.CanonicalPath) &&
+            !string.Equals(file.FullPath, proposal.CanonicalPath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException("The canonical destination is occupied by another file.");
+        }
+
+        Rename(file.FullPath, proposal.CanonicalPath);
+        proposal.Operations.Add(new FileOperationRecord
+        {
+            SubtitleFileRecordId = file.Id,
+            Type = OperationType.Rename,
+            Status = OperationStatus.Applied,
+            SourcePath = file.FullPath,
+            DestinationPath = proposal.CanonicalPath,
+            Sha256 = file.Sha256,
+            OccurredUtc = clock.UtcNow
+        });
+        proposal.Status = ProposalStatus.Applied;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task QuarantineManualAsync(int proposalId, CancellationToken cancellationToken = default)
+    {
+        using var lease = await gate.EnterAsync(cancellationToken);
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var proposal = await db.ChangeProposals.Include(x => x.Files)
+            .SingleAsync(x => x.Id == proposalId, cancellationToken);
+        var file = await ValidateManualAsync(proposal, cancellationToken);
+        var destination = BuildQuarantinePath(file);
+        fileSystem.CreateDirectory(Path.GetDirectoryName(destination)!);
+        await fileSystem.CopyAsync(file.FullPath, destination, cancellationToken);
+        var copiedHash = await fileSystem.ComputeSha256Async(destination, cancellationToken);
+        if (!copiedHash.Equals(file.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            fileSystem.Delete(destination);
+            throw new IOException($"The quarantine copy of '{file.FileName}' failed hash verification.");
+        }
+
+        try
+        {
+            fileSystem.Delete(file.FullPath);
+        }
+        catch
+        {
+            if (fileSystem.FileExists(destination))
+            {
+                fileSystem.Delete(destination);
+            }
+
+            throw;
+        }
+
+        proposal.Operations.Add(new FileOperationRecord
+        {
+            SubtitleFileRecordId = file.Id,
+            Type = OperationType.Quarantine,
+            Status = OperationStatus.Applied,
+            SourcePath = file.FullPath,
+            DestinationPath = destination,
+            Sha256 = file.Sha256,
+            OccurredUtc = clock.UtcNow
+        });
+        proposal.Status = ProposalStatus.Applied;
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task ApplyAsync(int proposalId, CancellationToken cancellationToken = default)
     {
         using var lease = await gate.EnterAsync(cancellationToken);
@@ -265,6 +343,35 @@ public sealed class ChangeExecutionService(
         {
             throw new IOException("The canonical destination is occupied by a file outside this proposal.");
         }
+    }
+
+    private async Task<SubtitleFileRecord> ValidateManualAsync(
+        ChangeProposal proposal,
+        CancellationToken cancellationToken)
+    {
+        if (proposal.Status != ProposalStatus.Pending ||
+            proposal.Kind != ProposalKind.ManualReview ||
+            proposal.Files.Count != 1)
+        {
+            throw new InvalidOperationException("Only pending manual-review proposals can be processed.");
+        }
+
+        var file = proposal.Files[0];
+        if (!fileSystem.FileExists(file.FullPath))
+        {
+            throw new StaleProposalException($"'{file.FileName}' no longer exists. Run a new scan.");
+        }
+
+        var info = fileSystem.GetFileInfo(file.FullPath);
+        var hash = await fileSystem.ComputeSha256Async(file.FullPath, cancellationToken);
+        if (info.Length != file.Size ||
+            info.LastWriteTimeUtc != file.LastWriteUtc ||
+            !hash.Equals(file.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new StaleProposalException($"'{file.FileName}' changed after it was scanned.");
+        }
+
+        return file;
     }
 
     private string BuildQuarantinePath(SubtitleFileRecord file)

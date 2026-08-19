@@ -67,6 +67,13 @@ public sealed class IsoLanguageCatalog
     public bool TryNormalize(string code, out string normalized) =>
         _codes.TryGetValue(code, out normalized!);
 
+    public static string DisplayName(string code)
+    {
+        var culture = CultureInfo.GetCultures(CultureTypes.NeutralCultures)
+            .FirstOrDefault(x => x.ThreeLetterISOLanguageName.Equals(code, StringComparison.OrdinalIgnoreCase));
+        return culture?.EnglishName ?? code;
+    }
+
     private void Add(string alpha2, string alpha3)
     {
         _codes[alpha2] = alpha3;

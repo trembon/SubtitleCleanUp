@@ -85,4 +85,56 @@ public sealed class ReviewComponentTests
         var stored = verifyDb.ChangeProposals.Include(x => x.Files).Single();
         stored.SelectedKeeperId.ShouldBe(stored.Files.Single(x => x.IsRecommended).Id);
     }
+
+    [Fact]
+    public void Review_shows_manual_actions_and_filter_selection_button()
+    {
+        using var factory = new TestDbFactory();
+        using (var db = factory.CreateDbContext())
+        {
+            db.ChangeProposals.Add(new Data.ChangeProposal
+            {
+                GroupKey = "manual",
+                FingerprintSignature = "fingerprint",
+                RootName = "media",
+                DirectoryPath = "/media",
+                MediaStem = "file",
+                Language = "eng",
+                CanonicalPath = "/media/file.eng.srt",
+                Kind = Core.Models.ProposalKind.ManualReview,
+                Reason = "manual",
+                Files =
+                [
+                    new Data.SubtitleFileRecord
+                    {
+                        FileName = "file..eng(2).srt", RelativePath = "file..eng(2).srt",
+                        FullPath = "/media/file..eng(2).srt", RootName = "media", RootPath = "/media"
+                    }
+                ]
+            });
+            db.SaveChanges();
+        }
+
+        using var context = new BunitContext();
+        context.Services.AddSingleton<IDbContextFactory<Data.SubtitleCleanupDbContext>>(factory);
+        context.Services.AddSingleton(new ChangeExecutionService(
+            factory,
+            new PhysicalSubtitleFileSystem(),
+            Options.Create(new SubtitleCleanupOptions { QuarantineRoot = Path.GetTempPath() }),
+            new SystemClock(),
+            new OperationGate(),
+            NullLogger<ChangeExecutionService>.Instance));
+        context.Services.AddSingleton(new SubtitlePreviewService(
+            factory,
+            new PhysicalSubtitleFileSystem(),
+            Options.Create(new SubtitleCleanupOptions())));
+
+        var component = context.Render<Review>();
+
+        component.Markup.ShouldContain("Rename to English (eng)");
+        component.Markup.ShouldContain("Delete");
+        component.FindAll("button").Single(x => x.TextContent.Contains("Select all visible"))
+            .HasAttribute("disabled").ShouldBeTrue();
+        component.Find("label.select-proposal").TextContent.ShouldContain("file");
+    }
 }

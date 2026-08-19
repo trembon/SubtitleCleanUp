@@ -6,6 +6,7 @@ namespace SubtitleCleanUp.Core.Abstractions;
 public interface ISubtitleFilenameParser
 {
     ParsedSubtitleName? Parse(string subtitleFileName, IReadOnlyCollection<string> mediaStems);
+    ManualSubtitleName? Analyze(string subtitleFileName, IReadOnlyCollection<string> mediaStems);
 }
 
 public interface ISubtitleFileSystem
