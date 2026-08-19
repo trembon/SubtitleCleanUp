@@ -74,4 +74,41 @@ public sealed class SubtitleFilenameParserTests
         result.Language.ShouldBe(language);
         result.CanonicalFileName.ShouldBe(canonical);
     }
+
+    [Theory]
+    [InlineData("file.ass")]
+    [InlineData("file.srt")]
+    public void Analyze_handles_unsupported_or_language_free_names(string fileName)
+    {
+        var result = _parser.Analyze(fileName, ["file"]);
+
+        if (fileName.EndsWith(".ass", StringComparison.OrdinalIgnoreCase))
+        {
+            result.ShouldBeNull();
+        }
+        else
+        {
+            result.ShouldNotBeNull();
+            result.Language.ShouldBeNull();
+            result.CanonicalFileName.ShouldBeNull();
+        }
+    }
+
+    [Fact]
+    public void Analyze_normalizes_variant_and_supports_exact_media_stem()
+    {
+        var result = _parser.Analyze("Movie.sdh.srt", ["Movie"]);
+
+        result.ShouldNotBeNull();
+        result.MediaStem.ShouldBe("Movie");
+        result.Variant.ShouldBe("sdh");
+        result.CanonicalFileName.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Analyze_rejects_missing_or_ambiguous_media_stems()
+    {
+        _parser.Analyze("Other.en.srt", Media).ShouldBeNull();
+        _parser.Analyze("A.en.srt", ["A", "A"]).ShouldBeNull();
+    }
 }
