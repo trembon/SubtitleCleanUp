@@ -1,0 +1,136 @@
+@page "/history/content-backups"
+@rendermode InteractiveServer
+@inject IDbContextFactory<SubtitleCleanupDbContext> DbFactory
+@inject ContentCleanupService Cleaner
+
+<PageTitle>Content backups · SubtitleCleanUp</PageTitle>
+
+<header class="page-header">
+    <div>
+        <p class="eyebrow">History &amp; recovery</p>
+        <h1>Content backups</h1>
+        <p class="lede">Restore an original subtitle while the cleaned copy is still at its original path.</p>
+    </div>
+</header>
+
+<HistoryNavigation />
+
+@if (_notice is not null)
+{
+    <div class="notice @(_error ? "error" : "success")" role="status">@_notice</div>
+}
+
+<section class="panel history-panel content-cleanup-panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">Content cleanup</p><h2>Original subtitles</h2></div>
+        <span class="badge">@_totalCount backups</span>
+    </div>
+
+    @if (_loading)
+    {
+        <p class="loading-state" role="status">Loading content backups…</p>
+    }
+    else if (_operations.Count == 0)
+    {
+        <p class="empty-state">Original subtitles will appear here after the first cleanup.</p>
+    }
+    else
+    {
+        <div class="operation-list">
+            @foreach (var operation in _operations)
+            {
+                <div @key="operation.Id" class="cleanup-file">
+                    <div class="cleanup-file-heading">
+                        <strong>@Path.GetFileName(operation.SourcePath)</strong>
+                        <span class="badge">@StatusLabel(operation.Status)</span>
+                    </div>
+                    <p>Original path <code>@operation.SourcePath</code></p>
+                    <p>Backup path <code>@operation.DestinationPath</code></p>
+                    <p>@operation.OccurredUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</p>
+                    @if (operation.Error is not null)
+                    {
+                        <p>@operation.Error</p>
+                    }
+                    @if (operation.Status == OperationStatus.Applied)
+                    {
+                        <button class="button secondary small" disabled="@_restoring" @onclick="() => RestoreAsync(operation.Id)">Restore original</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+    <HistoryPagination Route="@Route" CurrentPage="@_currentPage" PageSize="@PageSize" TotalCount="@_totalCount" TotalPages="@TotalPages" />
+</section>
+
+@code {
+    private const string Route = "/history/content-backups";
+    private const int PageSize = 25;
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int Page { get; set; } = 1;
+
+    private IReadOnlyList<FileOperationRecord> _operations = [];
+    private int _currentPage = 1;
+    private int _totalCount;
+    private bool _loading = true, _restoring, _error;
+    private string? _notice;
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_totalCount / (double)PageSize));
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            await Cleaner.ReconcileAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var query = db.FileOperations.AsNoTracking().Where(operation => operation.Type == OperationType.ContentCleanup)
+                .OrderByDescending(operation => operation.OccurredUtc).ThenByDescending(operation => operation.Id);
+            _totalCount = await query.CountAsync();
+            _currentPage = Math.Clamp(Page, 1, TotalPages);
+            _operations = await query.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _notice = $"Could not load content backups. {ex.Message}";
+            _error = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RestoreAsync(int id)
+    {
+        if (_restoring)
+        {
+            return;
+        }
+        _restoring = true;
+        try
+        {
+            await Cleaner.RestoreAsync(id);
+            _notice = "Original subtitle restored.";
+            _error = false;
+        }
+        catch (Exception ex)
+        {
+            _notice = $"Restore failed. {ex.Message}";
+            _error = true;
+        }
+        finally
+        {
+            await LoadAsync();
+            _restoring = false;
+        }
+    }
+
+    private static string StatusLabel(OperationStatus status) => status switch
+    {
+        OperationStatus.CleanupPending => "Replacement pending",
+        OperationStatus.CleanupRestoring => "Restore pending",
+        _ => status.ToString()
+    };
+}

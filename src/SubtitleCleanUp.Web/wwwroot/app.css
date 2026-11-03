@@ -218,3 +218,10 @@ th, td { border-top: 1px solid var(--line); padding: .75rem .5rem; }
     .history-pagination { align-items: flex-start; flex-direction: column; }
     .pagination-actions { justify-content: space-between; width: 100%; }
 }
+.content-cleanup-panel { margin-bottom: 1rem; }
+.cleanup-path, .cleanup-file { overflow-wrap: anywhere; }
+.cleanup-folders, .cleanup-file-heading { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.cleanup-file { border-bottom: 1px solid var(--line); padding: .75rem 0; }
+.cleanup-file:last-child { border-bottom: 0; }
+.cleanup-file p, .cleanup-example p { margin: .35rem 0; }
+.cleanup-example .subtitle-preview { margin: .25rem 0 .75rem; }

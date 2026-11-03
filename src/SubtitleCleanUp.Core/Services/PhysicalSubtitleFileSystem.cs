@@ -46,6 +46,33 @@ public sealed class PhysicalSubtitleFileSystem : ISubtitleFileSystem
     }
 
     public void Move(string source, string destination) => File.Move(source, destination);
+    public void Replace(string source, string destination)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(source, File.GetUnixFileMode(destination));
+        }
+        File.Replace(source, destination, null);
+    }
+
+    public async Task WriteNewAsync(string path, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken)
+    {
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.CreateNew,
+            Access = FileAccess.Write,
+            Options = FileOptions.Asynchronous
+        };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+        await using var stream = new FileStream(path, options);
+        await stream.WriteAsync(bytes, cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+        stream.Flush(flushToDisk: true);
+    }
+
     public void Delete(string path) => File.Delete(path);
     public void CreateDirectory(string path) => Directory.CreateDirectory(path);
 }

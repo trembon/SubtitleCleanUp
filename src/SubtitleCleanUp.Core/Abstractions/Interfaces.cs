@@ -19,6 +19,8 @@ public interface ISubtitleFileSystem
     Task<string> ComputeSha256Async(string path, CancellationToken cancellationToken);
     Task<byte[]> ReadBytesAsync(string path, int maximumBytes, CancellationToken cancellationToken);
     Task CopyAsync(string source, string destination, CancellationToken cancellationToken);
+    Task WriteNewAsync(string path, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken);
+    void Replace(string source, string destination);
     void Move(string source, string destination);
     void Delete(string path);
     void CreateDirectory(string path);

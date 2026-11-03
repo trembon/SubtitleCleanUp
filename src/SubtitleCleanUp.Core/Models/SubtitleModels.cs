@@ -20,7 +20,8 @@ public enum ProposalStatus
 public enum OperationType
 {
     Rename,
-    Quarantine
+    Quarantine,
+    ContentCleanup
 }
 
 public enum OperationStatus
@@ -28,7 +29,9 @@ public enum OperationStatus
     Applied,
     Failed,
     Restored,
-    Purged
+    Purged,
+    CleanupPending,
+    CleanupRestoring
 }
 
 public sealed record ParsedSubtitleName(

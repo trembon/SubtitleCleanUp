@@ -94,6 +94,9 @@ namespace SubtitleCleanUp.Web.Data.Migrations
                     b.Property<int?>("ChangeProposalId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("CleanedSha256")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("DestinationPath")
                         .IsRequired()
                         .HasColumnType("TEXT");

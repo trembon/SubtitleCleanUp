@@ -81,6 +81,7 @@ builder.Services.AddSingleton<OperationGate>();
 builder.Services.AddSingleton<ScanCoordinator>();
 builder.Services.AddSingleton<ChangeExecutionService>();
 builder.Services.AddSingleton<SubtitlePreviewService>();
+builder.Services.AddSingleton<ContentCleanupService>();
 builder.Services.AddSingleton<ScanScheduler>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<ScanScheduler>());
 

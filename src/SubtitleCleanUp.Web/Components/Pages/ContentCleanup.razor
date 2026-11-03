@@ -1,0 +1,275 @@
+@page "/content-cleanup"
+@rendermode InteractiveServer
+@inject ContentCleanupService Cleaner
+
+<PageTitle>Content cleanup · SubtitleCleanUp</PageTitle>
+
+<header class="page-header">
+    <div>
+        <p class="eyebrow">Manual tools</p>
+        <h1>Content cleanup</h1>
+        <p class="lede">Preview and remove editor comments, converted drawings, and karaoke fragments from SRT files in a season folder.</p>
+    </div>
+</header>
+
+@if (_error is not null)
+{
+    <div class="notice error" role="alert">@_error</div>
+}
+
+<section class="panel content-cleanup-panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">Media folders</p><h2>Choose a folder</h2></div>
+        <button class="button primary" disabled="@(_busy || !_folderAvailable)" @onclick="PreviewAsync">Preview folder</button>
+    </div>
+    <label for="cleanup-root">Media root</label>
+    <select id="cleanup-root" value="@_folder.RootName" disabled="@_busy" @onchange="ChangeRoot">
+        @foreach (var root in Cleaner.RootNames)
+        {
+            <option value="@root">@root</option>
+        }
+    </select>
+    <p class="cleanup-path"><strong>Selected folder</strong> <code>@_folder.RootName/@_folder.RelativePath</code></p>
+    <div class="cleanup-folders" aria-label="Browse subfolders">
+        @if (_folder.RelativePath.Length > 0)
+        {
+            <button class="button secondary small" disabled="@_busy" @onclick="GoUp">↑ Parent folder</button>
+        }
+        @foreach (var name in _subfolders)
+        {
+            <button @key="name" class="button secondary small" disabled="@_busy" @onclick="() => OpenFolder(name)">@name</button>
+        }
+    </div>
+</section>
+
+@if (_busy)
+{
+    <p class="loading-state" role="status">@_busyMessage</p>
+}
+
+@if (_preview is not null)
+{
+    <section class="panel content-cleanup-panel">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">@(_applied ? "Results" : "Preview")</p>
+                <h2>@_preview.Count SRT files</h2>
+                @if (_applied)
+                {
+                    <p role="status">@Count(ContentCleanupStatus.Updated) updated · @Count(ContentCleanupStatus.Unchanged) unchanged · @Count(ContentCleanupStatus.Skipped) skipped · @Count(ContentCleanupStatus.Failed) failed</p>
+                }
+                else
+                {
+                    <p>@Count(ContentCleanupStatus.Changed) with changes · @Count(ContentCleanupStatus.Unchanged) unchanged · @Count(ContentCleanupStatus.Skipped) skipped</p>
+                }
+            </div>
+            @if (!_applied)
+            {
+                <button class="button primary" disabled="@(_busy || _selected.Count == 0)" @onclick="() => _confirming = true">Apply selected (@_selected.Count)</button>
+            }
+        </div>
+        @if (_preview.Count == 0)
+        {
+            <p class="empty-state">No SRT files were found directly in this folder.</p>
+        }
+        else
+        {
+            <div class="operation-list">
+                @foreach (var file in _preview)
+                {
+                    <div @key="file.FileName" class="cleanup-file">
+                        <div class="cleanup-file-heading">
+                            @if (!_applied && file.Status == ContentCleanupStatus.Changed)
+                            {
+                                <label><input type="checkbox" checked="@_selected.Contains(file.FileName)" disabled="@_busy"
+                                              @onchange="e => Select(file.FileName, e)" /> <strong>@file.FileName</strong></label>
+                            }
+                            else
+                            {
+                                <strong>@file.FileName</strong>
+                            }
+                            <span class="badge">@StatusLabel(file.Status)</span>
+                        </div>
+                        @if (file.Message is not null)
+                        {
+                            <p>@file.Message</p>
+                        }
+                        @if (file.Counts is { Count: > 0 })
+                        {
+                            <p>@string.Join(" · ", file.Counts.Select(count => $"{count.Value} {ReasonLabel(count.Key)}"))</p>
+                        }
+                        @if (file.PossibleKaraokeCues > 0)
+                        {
+                            <p>@file.PossibleKaraokeCues possible karaoke fragments kept for review.</p>
+                        }
+                        @if (file.Examples is { Count: > 0 })
+                        {
+                            <details>
+                                <summary>Before and after examples</summary>
+                                @foreach (var example in file.Examples)
+                                {
+                                    <div class="cleanup-example">
+                                        <p>@ReasonLabel(example.Reason) · <code>@example.Timing</code></p>
+                                        <p>Before</p>
+                                        <pre class="subtitle-preview">@example.Before</pre>
+                                        <p>After</p>
+                                        <pre class="subtitle-preview">@example.After</pre>
+                                    </div>
+                                }
+                            </details>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </section>
+}
+
+@if (_confirming)
+{
+    <div class="modal-backdrop">
+        <section class="modal confirmation" role="dialog" aria-modal="true" aria-labelledby="cleanup-confirm-title">
+            <h2 id="cleanup-confirm-title">Clean @_selected.Count selected files?</h2>
+            <p>Each subtitle keeps its filename. Originals are saved under <a href="/history/content-backups">Content backups</a>.</p>
+            <div class="modal-actions">
+                <button class="button ghost" @onclick="() => _confirming = false">Cancel</button>
+                <button class="button primary" @onclick="ApplyAsync">Confirm cleanup</button>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private ContentCleanupFolder _folder = new("", "");
+    private IReadOnlyList<string> _subfolders = [];
+    private IReadOnlyList<ContentCleanupPreview>? _preview;
+    private readonly HashSet<string> _selected = new(StringComparer.Ordinal);
+    private bool _folderAvailable, _busy, _confirming, _applied;
+    private string? _error, _busyMessage;
+
+    protected override void OnInitialized() => OpenRoot(Cleaner.RootNames.FirstOrDefault() ?? "");
+
+    private void ChangeRoot(ChangeEventArgs args) => OpenRoot(args.Value?.ToString() ?? "");
+
+    private void OpenRoot(string root) => Browse(new(root, ""));
+
+    private void GoUp() => Browse(_folder with { RelativePath = Path.GetDirectoryName(_folder.RelativePath) ?? "" });
+
+    private void OpenFolder(string name) => Browse(_folder with { RelativePath = Path.Combine(_folder.RelativePath, name) });
+
+    private void Browse(ContentCleanupFolder folder)
+    {
+        if (_busy)
+        {
+            return;
+        }
+        _folder = folder;
+        _preview = null;
+        _selected.Clear();
+        _applied = false;
+        _error = null;
+        _folderAvailable = false;
+        _subfolders = [];
+        try
+        {
+            _subfolders = Cleaner.ListFolders(folder);
+            _folderAvailable = true;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not open this folder. {ex.Message}";
+        }
+    }
+
+    private async Task PreviewAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+        _busy = true;
+        _busyMessage = "Previewing subtitles…";
+        _error = null;
+        _preview = null;
+        _selected.Clear();
+        _applied = false;
+        try
+        {
+            _preview = await Cleaner.PreviewAsync(_folder);
+            _selected.UnionWith(_preview.Where(file => file.Status == ContentCleanupStatus.Changed).Select(file => file.FileName));
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not preview this folder. {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Select(string name, ChangeEventArgs args)
+    {
+        if (args.Value is true)
+        {
+            _selected.Add(name);
+        }
+        else
+        {
+            _selected.Remove(name);
+        }
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (_busy || !_confirming || _preview is null)
+        {
+            return;
+        }
+        _confirming = false;
+        _busy = true;
+        _busyMessage = "Applying content cleanup…";
+        _error = null;
+        try
+        {
+            var results = await Cleaner.ApplyAsync(_folder, _preview.Where(file => _selected.Contains(file.FileName)).ToArray());
+            var byName = results.ToDictionary(file => file.FileName, StringComparer.Ordinal);
+            _preview = _preview.Select(file =>
+            {
+                if (byName.TryGetValue(file.FileName, out var result))
+                {
+                    return file with { Status = result.Status, Message = result.Message };
+                }
+                return file.Status == ContentCleanupStatus.Changed
+                    ? file with { Status = ContentCleanupStatus.Skipped, Message = "Not selected." }
+                    : file;
+            }).ToArray();
+            _applied = true;
+            _selected.Clear();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not finish cleanup. {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private int Count(ContentCleanupStatus status) => _preview?.Count(file => file.Status == status) ?? 0;
+
+    private static string StatusLabel(ContentCleanupStatus status) =>
+        status == ContentCleanupStatus.Changed ? "Will change" : status.ToString();
+
+    private static string ReasonLabel(SrtCleanupReason reason) => reason switch
+    {
+        SrtCleanupReason.BraceBlocks => "cues with brace blocks removed",
+        SrtCleanupReason.DrawingData => "cues with drawing data removed",
+        SrtCleanupReason.KaraokeFragments => "karaoke fragments removed",
+        SrtCleanupReason.EmptyCues => "empty cues removed",
+        SrtCleanupReason.OverlayDuplicates => "overlay duplicates removed",
+        SrtCleanupReason.PossibleKaraoke => "possible karaoke fragment kept",
+        _ => reason.ToString()
+    };
+}

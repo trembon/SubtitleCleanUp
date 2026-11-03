@@ -56,6 +56,23 @@ reverse proxy.
 SQLite state and quarantined files are stored in the `subtitlecleanup-data` volume.
 Removing and recreating the application container does not remove that volume.
 
+## Clean subtitle content manually
+
+Open **Content cleanup**, browse to a season folder under a configured media
+root, and select **Preview folder**. The preview covers the SRT files directly
+in that folder across all languages. It shows the cues affected by brace
+comments, ASS drawing commands, repeated overlays, and identifiable karaoke
+fragments. Dialogue, readable lyric lines, and uncertain fragments are kept.
+
+Review the examples, deselect any files you want to skip, then confirm
+**Apply selected**. Cleaned subtitles keep their filenames. Originals appear
+under **History & recovery → Content backups**. You can restore an original
+there while its cleaned subtitle is still at the same path and matches the
+saved hash. Backups are stored under the persistent quarantine directory.
+
+The tool handles UTF-8 and BOM-marked UTF-16 files up to 64 MiB each. It runs
+only when manually opened and applied.
+
 ## Prebuilt container
 
 After the test suite passes on `main`, GitHub Actions publishes the same Dockerfile
