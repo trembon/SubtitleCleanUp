@@ -88,11 +88,15 @@ public sealed class ContentCleanupServiceTests : IDisposable
     {
         var english = await WriteAsync("episode.eng.srt", Dirty);
         var swedish = await WriteAsync("episode.swe.srt", Dirty);
+        Directory.CreateDirectory(Path.Combine(_season, "Extras"));
         using var context = new BunitContext();
         context.Services.AddSingleton(CreateCleaner());
         var page = context.Render<ContentCleanup>();
 
         Button("Season 2").Click();
+        Button("Extras").Click();
+        page.Find(".cleanup-path code").TextContent.ShouldBe("media/Season 2/Extras");
+        Button("↑ Parent folder").Click();
         Button("Preview folder").Click();
         page.WaitForAssertion(() => page.FindAll("input[type=checkbox][checked]").Count.ShouldBe(2));
         page.FindAll("input[type=checkbox]")[1].Change(false);

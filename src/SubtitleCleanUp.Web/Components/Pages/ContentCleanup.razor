@@ -29,7 +29,7 @@
             <option value="@root">@root</option>
         }
     </select>
-    <p class="cleanup-path"><strong>Selected folder</strong> <code>@_folder.RootName/@_folder.RelativePath</code></p>
+    <p class="cleanup-path"><strong>Selected folder</strong> <code>@_folder.RootName/@(_folder.RelativePath.Replace(Path.DirectorySeparatorChar, '/'))</code></p>
     <div class="cleanup-folders" aria-label="Browse subfolders">
         @if (_folder.RelativePath.Length > 0)
         {
